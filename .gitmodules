@@ -1,0 +1,6 @@
+[submodule "TPLibs"]
+	path = TPLibs
+	url = https://github.com/MobyGamer/TPLibs.git
+[submodule "UNITS"]
+	path = UNITS
+	url = https://github.com/MobyGamer/UNITS.git
