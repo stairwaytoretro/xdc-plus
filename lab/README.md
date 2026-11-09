@@ -1,50 +1,50 @@
-# Laboratoire de compilation DOS
+# DOS compilation lab
 
-Ce dossier recompile le compilateur XDC (`xdc_comp`) avec Turbo Pascal 7.0 dans DOSBox-X. Les sources XDC ne sont pas modifiées. Les binaires DOS ne sont lancés que dans l'émulateur.
+This folder rebuilds the XDC compiler (`xdc_comp`) with Turbo Pascal 7.0 inside DOSBox-X. The XDC sources are not modified. DOS binaries are launched only inside the emulator.
 
-## Prérequis
+## Prerequisites
 
-- DOSBox-X (`sudo apt install dosbox-x` sur Ubuntu 24.04). Le script le démarre sans fenêtre (`SDL_VIDEODRIVER=dummy`).
-- Votre propre copie de Turbo Pascal 7.0 : l'archive zip qui contient `TP70/PASCAL.EXE`, ou `PASCAL.EXE` lui-même (auto-extracteur PKSFX 2.04g). Ces fichiers ne font pas partie du dépôt.
-- Les sous-modules, depuis la racine du dépôt :
+- DOSBox-X (`sudo apt install dosbox-x` on Ubuntu 24.04). The script starts it without a window (`SDL_VIDEODRIVER=dummy`).
+- Your own copy of Turbo Pascal 7.0: the zip archive that contains `TP70/PASCAL.EXE`, or `PASCAL.EXE` itself (PKSFX 2.04g self-extractor). These files are not part of the repository.
+- The submodules, from the repository root:
 
 ```
 git submodule update --init --recursive
 ```
 
-## Compilation
+## Build
 
 ```
-./lab/build.sh /chemin/vers/tp7.zip
+./lab/build.sh /path/to/tp7.zip
 ```
 
-Au premier lancement, le script :
+On the first run, the script:
 
-1. extrait `PASCAL.EXE` de l'archive zip avec l'outil zip de l'hôte (ce n'est pas un binaire DOS) ;
-2. exécute `PASCAL.EXE -d -o` dans DOSBox-X, ce qui installe l'arbre `TP\` dans `lab/tp/` ;
-3. lance `TPC.EXE` sur `XDC_COMP.PAS`, avec les unités `C:\TP\UNITS`, `UNITS` et `TPLibs\CGA\LIB` ;
-4. exécute le `XDC_COMP.EXE` produit, sans argument, et écrit l'aide dans `lab/out/HELP.TXT`.
+1. extracts `PASCAL.EXE` from the zip archive with the host zip tool (it is not a DOS binary);
+2. runs `PASCAL.EXE -d -o` inside DOSBox-X, which installs the `TP\` tree into `lab/tp/`;
+3. runs `TPC.EXE` on `XDC_COMP.PAS`, with the units `C:\TP\UNITS`, `UNITS`, and `TPLibs\CGA\LIB`;
+4. runs the produced `XDC_COMP.EXE` with no arguments, and writes the help text to `lab/out/HELP.TXT`.
 
-Les lancements suivants réutilisent `lab/tp/` et n'ont plus besoin du chemin de l'archive. Pour réinstaller : `rm -rf lab/tp`.
+Later runs reuse `lab/tp/` and no longer need the archive path. To reinstall: `rm -rf lab/tp`.
 
-Le journal du compilateur est `lab/out/COMP.LOG`. Une compilation réussie se termine par une ligne du type `4097 lines, … bytes code, … bytes data`, sans `Error` ni `Warning`.
+The compiler log is `lab/out/COMP.LOG`. A successful build ends with a line of the form `4097 lines, … bytes code, … bytes data`, with neither `Error` nor `Warning`.
 
-## Lecteur (`xdc_play`)
+## Player (`xdc_play`)
 
 ```
 ./lab/build.sh play
 ```
 
-`XDC_PLAY.PAS` compile ses autres unités puis s'arrête sur `Error 15: File not found (SOUNDLIB.TPU)`. `SOUNDLIB.PAS` a été retiré d'upstream ; ce dépôt n'en fournit pas de remplacement.
+`XDC_PLAY.PAS` compiles its other units, then stops on `Error 15: File not found (SOUNDLIB.TPU)`. `SOUNDLIB.PAS` was removed upstream; this repository does not provide a replacement.
 
-## Commande TPC
+## TPC command
 
-`S:` est la racine du dépôt, `O:` est `lab/out`, `C:\TP` est l'installation Turbo Pascal.
+`S:` is the repository root, `O:` is `lab/out`, `C:\TP` is the Turbo Pascal installation.
 
 ```
 TPC -UC:\TP\UNITS;S:\UNITS;S:\TPLIBS\CGA\LIB -EO:\ -B S:\XDC_COMP.PAS
 ```
 
-## Fichiers ignorés
+## Ignored files
 
-`lab/tp/`, `lab/dist/`, `lab/out/` et les `*.zip` placés dans `lab/` sont ignorés par git. Ne commitez ni les fichiers Borland, ni l'archive, ni les `.EXE` et `.TPU` produits.
+`lab/tp/`, `lab/dist/`, `lab/out/`, and `*.zip` files placed in `lab/` are ignored by git. Do not commit Borland files, the archive, or the produced `.EXE` and `.TPU` files.
