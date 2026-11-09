@@ -80,7 +80,8 @@ waveinput=filename.wav   location of 8-bit PCM audio data
                          will be the same as the input script + '.xdv'
 
 debug=x                  debug level in log.  0=none; 1-3 increases verbosity
-screenmode=xxx           Screen mode of next frame.  160, 320, 640 for now.
+screenmode=xxx           Screen mode of next frame.  1=160x200x16, 2=640x200,
+                         3=Tandy 160x200x16, 5 or 160x100=160x100x16 RGBI.
                          (for the next three, a value of "on" will turn the
                          feature on without changing the value, and a
                          numeric value will set the feature's value.)
@@ -271,10 +272,7 @@ begin
   stdout(realtostr(eticks / (14.31818/12/65536*1000000))+' seconds elapsed');
   closeLogging;
 
-  asm
-    mov ax,0003
-    int 10h
-  end;
+  xdc_donevid;
 end;
 
 procedure loadbmp(s:string);
@@ -314,6 +312,7 @@ var
   x:byte;
   sa:array[0..160-1] of byte;
   da:array[0..80-1] of byte;
+  cellp:^word;
   fs:word;
   lp:longint;
 begin
@@ -399,6 +398,34 @@ begin
         end;
       end;
       160:begin
+        if screenmode=5 then begin
+          {160x100x16 RGBI. Each cell is char 0xDE plus an attribute:
+           background = left pixel, foreground = right pixel. Only those
+           odd attribute bytes differ from the previous frame once the
+           screen has been filled with 0xDE.}
+          if header2^.bitsPerPixel<>8
+            then fatalerr('160x100 bitmap uses '+inttostr(header2^.bitsPerPixel)+'-bit pixels; need 8-bit');
+          if header2^.heightInPixels<>100
+            then fatalerr('160x100 bitmap has '+inttostr(header2^.heightInPixels)+' lines; need 100');
+          sl:=pointer(header2);
+          inc(word(sl),40);
+          inc(word(sl),header2^.numColors*4);
+          src_slwidth:=header2^.widthInPixels div (8 div header2^.bitsPerPixel);
+          destbank0:=nextFrame;
+          destbank0:=addptr(destbank0,16000-160);
+          for w:=0 to 99 do begin
+            move(sl^,sa,160);
+            for x:=0 to 79 do
+              da[x]:=((sa[x*2] and $0F) shl 4) or (sa[(x*2)+1] and $0F);
+            cellp:=destbank0;
+            for x:=0 to 79 do begin
+              cellp^:=$00DE or (word(da[x]) shl 8);
+              inc(word(cellp),2);
+            end;
+            sl:=addptr(sl,src_slwidth);
+            destbank0:=subptr(destbank0,160);
+          end;
+        end else begin
         {make sure this is a 160x200 pic with 8-bit pixels (because it is
         surprisingly difficult to save a 16-color picture as 4-bit with a
         custom palette using modern tools -- I guess they all removed that
@@ -432,6 +459,7 @@ begin
             sl:=addptr(sl,src_slwidth);
             destbank0:=subptr(destbank0,dst_slwidth);
           end;
+        end;
         end;
       end;
       240:begin
@@ -638,6 +666,11 @@ begin
   if (word(opcodeBufPos)<>opcodeBufSize) then fatalerr('opcode pointer/size mismatch');
   if (word(dataBufPos)<>dataBufSize) then fatalerr('data pointer/size mismatch');
   inc(numEncodedFrames);
+  if screenmode=5 then
+    stdout('Frame '+inttostr(numEncodedFrames)
+      +': '+inttostr(opcodeBufSize+dataBufSize)+' bytes, '
+      +realtostr(cyclesPerFrame-cyclePool)+' cycles, '
+      +inttostr(deltas^.count)+' deltas left');
 end;
 
 function sliceEncodedSize(sofs,eofs:word):word;
@@ -1227,8 +1260,38 @@ begin
           +realtostr(cyclesperframe)+' cycles per frame');
       end;
       if key='SCREENMODE' then begin
-        {1=160x200x16   2=640x200x2  (more to follow?)}
-        if value[1] in ['1'..'4'] then begin
+        {1=160x200x16  2=640x200x2  3=Tandy  5=160x100x16 RGBI}
+        if (value='5') or (value='160X100') then begin
+          foundKeyPair:=true;
+          screenmode:=5;
+          screenbytewidth:=160;
+          screenbyteheight:=100;
+          screenRAMsize:=16000;
+          pixelBitDepth:=4;
+          xdc_setvid(screenmode);
+          {Video RAM is 0xDE/0x00. The previous frame must match so the
+           first deltas touch only attribute bytes that are not zero.}
+          asm
+            push    ds
+            les     di,prevframe
+            cld
+            mov     ax,$00DE
+            mov     cx,8000
+            rep     stosw
+            pop     ds
+          end;
+          move(prevframe^,nextframe^,screenRAMsize);
+          with tmpHeader do begin
+            vidmode:=screenmode;
+            numbcols:=screenbytewidth;
+            numprows:=screenbyteheight;
+          end;
+          if muxing then begin
+            seek(muxf,0);
+            blockwrite(muxf,tmpHeader,sizeof(tmpHeader),w);
+            seek(muxf,filesize(muxf));
+          end;
+        end else if value[1] in ['1'..'4'] then begin
           foundKeyPair:=true;
           screenmode:=strtoint(value[1]);
           xdc_setvid(screenmode);

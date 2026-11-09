@@ -4,6 +4,8 @@ xdc-plus est une extension de XDC (X86 Delta Compiler) de Jim Leonard (Trixter),
 
 Commit upstream importé : 56a5dc1951e1f0b8747fe8fa4614c607e2f91c8b (https://github.com/MobyGamer/XDC, branche master).
 
+Genuine IBM CGA shows snow in 80-column modes; there is no anti-snow handling for now.
+
 ---
 
 XDC
