@@ -1,5 +1,5 @@
-# Copie locale de Turbo Pascal 7, archive et produits de compilation.
-# Chacun fournit son propre TP7 ; rien de Borland n'est versionné.
+# Local copy of Turbo Pascal 7, the archive, and build products.
+# Everyone supplies their own TP7; nothing from Borland is versioned.
 /tp/
 /dist/
 /out/

@@ -1,8 +1,8 @@
 # xdc-plus
 
-xdc-plus est une extension de XDC (X86 Delta Compiler) de Jim Leonard (Trixter), https://github.com/MobyGamer/XDC. Objectif : ajouter des modes vidéo RGBI, d'abord CGA 160x100x16 (mode texte modifié), puis EGA 320x200x16.
+xdc-plus is an extension of Jim Leonard's (Trixter) XDC (X86 Delta Compiler), https://github.com/MobyGamer/XDC. Goal: add RGBI video modes, first CGA 160x100x16 (modified text mode), then EGA 320x200x16.
 
-Commit upstream importé : 56a5dc1951e1f0b8747fe8fa4614c607e2f91c8b (https://github.com/MobyGamer/XDC, branche master).
+Imported upstream commit: 56a5dc1951e1f0b8747fe8fa4614c607e2f91c8b (https://github.com/MobyGamer/XDC, master branch).
 
 ---
 
