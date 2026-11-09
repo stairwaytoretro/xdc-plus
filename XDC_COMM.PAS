@@ -11,6 +11,8 @@ procedure fatalerr(s:string);
 var
   egaSwitchesSaved:boolean;
   egaSwitchesOrig:byte;
+  egaSwitchesForced:byte; {value stored at 0040:0088 before the mode set}
+  egaSwitchesAfter:byte;  {value read back after the mode set}
 
 implementation
 
@@ -71,8 +73,10 @@ begin
   sw:=Mem[$0040:$0088];
   egaSwitchesOrig:=sw;
   egaSwitchesSaved:=true;
-  if (sw and $0F)=$03 then Mem[$0040:$0088]:=sw-1
-  else if (sw and $0F)=$09 then Mem[$0040:$0088]:=sw-1;
+  if (sw and $0F)=$03 then sw:=sw-1
+  else if (sw and $0F)=$09 then sw:=sw-1;
+  egaSwitchesForced:=sw;
+  Mem[$0040:$0088]:=sw;
 end;
 
 procedure setEga200Palette;
@@ -129,12 +133,11 @@ begin
         mov     ax,$0003
         int     10h
       end;
-      {Same 100x2 scanline CRTC setup as CGA. The BIOS mode set above
-       has already selected 200-line / 15.7 kHz timings.}
-      setCrtc($04,$7F);
-      setCrtc($05,$06);
-      setCrtc($06,$64);
-      setCrtc($07,$70);
+      egaSwitchesAfter:=Mem[$0040:$0088];
+      {Jenner: the 200-line BIOS mode set already has 200 scanlines.
+       R9=1 makes each row 2 scanlines, so 200/2 = 100 rows. The CGA
+       register numbers are not the EGA CRTC map (R6 is vertical total
+       there, not vertical displayed) and must not be written.}
       setCrtc($09,$01);
       blinkOffBIOS;
       setEga200Palette;

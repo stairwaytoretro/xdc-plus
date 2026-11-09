@@ -495,7 +495,11 @@ begin
   rewrite(note);
   writeln(note,'adapter=',videoAdapter);
   writeln(note,'switches=',Mem[$0040:$0088]);
-  if egaSwitchesSaved then writeln(note,'switches_orig=',egaSwitchesOrig);
+  if egaSwitchesSaved then begin
+    writeln(note,'switches_orig=',egaSwitchesOrig);
+    writeln(note,'switches_forced=',egaSwitchesForced);
+    writeln(note,'switches_after=',egaSwitchesAfter);
+  end;
   close(note);
 end;
 
