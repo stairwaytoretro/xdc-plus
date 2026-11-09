@@ -5,6 +5,11 @@
 
 {{$DEFINE HP95LX} {Undefine to add support for an HP95LX}
 
+{SOUNDLIB.PAS was removed upstream. This build paces frames from the PIT
+ and does not link the Sound Blaster unit. Undefine SILENT only if that
+ unit is available again.}
+{$DEFINE SILENT}
+
 {todo:
 -- add left/right skip by +/- 5 secs, 1 minute, 5 minutes
   - flash screen to register keypress? or just key click?
@@ -26,8 +31,11 @@ uses
   support,     {basic support stuff I don't want to include CRT for}
   cmdlin,      {for parsing command-line options}
   tinterrupts, {8253 manipulation routines}
-  dos,         {for getintvec/setintvec}
-  soundlib;    {Sound Blaster detection/setup/init/teardown code}
+  dos          {for getintvec/setintvec}
+{$IFNDEF SILENT}
+  ,soundlib    {Sound Blaster detection/setup/init/teardown code}
+{$ENDIF}
+  ;
 
 const
   {samplerate:word=22050;}
@@ -58,12 +66,26 @@ const
 
   Int1CSave:pointer=nil;
 
+{$IFDEF SILENT}
+{$F+}
+type
+  TSilentProc=procedure;
+{$F-}
+{$ENDIF}
+
 var
   f:tDosStream;
   header:XDVHeader;
   playp:pointer;
   AVRing:TSlabRing;
   fname:string;
+{$IFDEF SILENT}
+  play:record
+    p:pointer;
+    activeblock:byte;
+    callproc:TSilentProc;
+  end;
+{$ENDIF}
 
 procedure userTickHandler; interrupt;
 begin
@@ -87,7 +109,9 @@ begin
         db 'Usage:  xdc_play <switches> [filename] <switches>',0dh,0ah
         db '  <filename> is the video to play',0dh,0ah
         db '  /? or /h   This help',0dh,0ah
-        db '  /q         Quiet -- do not attempt to use a sound card',0dh,0ah
+        db '  /q         Quiet -- pace frames from the PIT, not a sound card',0dh,0ah
+        db '  /cga /ega /vga   Force 160x100 RGBI init (default: autodetect)',0dh,0ah
+        db '  /wNAME     After playback, write 16000 bytes of B800 to NAME',0dh,0ah
         db '  /kN        How much KB to read in a single operation',0dh,0ah
         db '  /p         Presentation mode (no messages, stay in graphics mode)',0dh,0ah
         db '  /d         Displays queue depth indicator',0dh,0ah
@@ -103,6 +127,20 @@ begin
   halt(255);
 end;
 
+procedure readAdapterFlag;
+{Accept /cga, /ega, or /vga. Is_Param only looks at one character.}
+var
+  i:integer;
+  s:string;
+begin
+  for i:=1 to paramcount do begin
+    s:=upstring(paramstr(i));
+    if (s='/CGA') or (s='-CGA') then videoAdapter:=1;
+    if (s='/EGA') or (s='-EGA') then videoAdapter:=2;
+    if (s='/VGA') or (s='-VGA') then videoAdapter:=3;
+  end;
+end;
+
 Procedure prepPlayer;
 var
   l:longint;
@@ -111,10 +149,13 @@ begin
   if (paramcount=0) or is_Param('h') or is_Param('?') then printHelp;
   if is_param('p') then presenting:=true;
   if is_param('d') then showpip:=true;
-  if is_param('q') then begin
-    quiet:=true;
-    if not presenting then writeln('User requested silence; using system timer instead of soundcard.');
-  end;
+  if is_param('q') then quiet:=true;
+{$IFDEF SILENT}
+  quiet:=true;
+{$ENDIF}
+  if quiet and (not presenting) then
+    writeln('Silent playback: frames are paced by the PIT at the source frame rate.');
+  readAdapterFlag;
   if is_param('k') then minDiskRead:=param_int('k');
   if non_flag_count>0 then fname:=non_flag_param(1);
   if not fileexists(fname) then fatalerror(1,'Filename "'+fname+'" not found');
@@ -335,6 +376,7 @@ begin
   DataQueued:=true;
 end;
 
+{$IFNDEF SILENT}
 Procedure primeSoundcard;
 var
   smult:real;
@@ -355,6 +397,7 @@ begin
   initplay(0,play.p,sndbufsize,header.samplerate,snd_8bit+snd_mono+snd_nonsigned);
   if not presenting then writeln(getblasterstring,' initialized.');
 end;
+{$ENDIF}
 
 {$F+}
 procedure noSoundIntCaller; Interrupt;
@@ -391,6 +434,9 @@ end;
 Procedure shutItDown;
 begin
   SetIntVec($01C,Int1CSave); {stop counting ticks}
+{$IFDEF SILENT}
+  CleanUpTimer;
+{$ELSE}
 {$IFDEF HP95LX}
   if not quiet
     then exitplay; {shutdown Sound Blaster}
@@ -399,16 +445,10 @@ begin
     then CleanUpTimer {stop our internal "sound" handler}
     else exitplay; {shutdown Sound Blaster}
 {$ENDIF}
+{$ENDIF}
 
   if not presenting then begin
-    asm
-{$IFDEF HP95LX}
-        mov     ax,7
-{$ELSE}
-        mov     ax,3
-{$ENDIF}
-        int     10h
-    end;
+    xdc_donevid;
     asm
         push    ds
         jmp     @start
@@ -430,14 +470,54 @@ begin
     writeln('CPU was ',(100*(cpuUsageCounter div cpuUsageTicks)) div cpuUsageCounterIdle,'% idle');
     writeln((100*IOUsageTicks) div cpuUsageTicks,'% of total playback time was spent reading from disk');
     writeln('# of elements still in the ring: ',AVRing.numElements);
-  end;
+  end else
+    xdc_releasevid;
   AVRing.done;
   freemem(packetindex,header.numpackets);
   if keypressed then repeat readkeychar until not keypressed; {absorb keystroke that was used to exit playback}
 end;
 
+procedure writeB800(s:string);
+type
+  TVid=array[0..15999] of byte;
+  PVid=^TVid;
+var
+  outf:file;
+  note:text;
+  vid:PVid;
+begin
+  vid:=Ptr($B800,0);
+  assign(outf,s);
+  rewrite(outf,1);
+  blockwrite(outf,vid^,16000);
+  close(outf);
+  assign(note,'NOTE.TXT');
+  rewrite(note);
+  writeln(note,'adapter=',videoAdapter);
+  writeln(note,'switches=',Mem[$0040:$0088]);
+  if egaSwitchesSaved then begin
+    writeln(note,'switches_orig=',egaSwitchesOrig);
+    writeln(note,'switches_forced=',egaSwitchesForced);
+    writeln(note,'switches_after=',egaSwitchesAfter);
+  end;
+  close(note);
+end;
+
+procedure holdPicture;
+{Wall-clock length depends on the PIT rate. The lab runs this near
+ realtime so a screenshot can be taken while the tweaked mode is up.}
+var
+  start:longint;
+begin
+  start:=cpuUsageTicks;
+  repeat until cpuUsageTicks>start+90; {about five seconds at 18.2 Hz}
+end;
+
 begin
   prepPlayer;
+{$IFDEF SILENT}
+  primeNoCard;
+{$ELSE}
   if quiet
 {$IFDEF HP95LX}
     then primeNoCard95LX
@@ -445,6 +525,7 @@ begin
     then primeNoCard
 {$ENDIF}
     else primeSoundcard;
+{$ENDIF}
   xdc_setvid(header.vidmode);
   {if not presenting then writeln('Performing initial buffering...');}
   EnqueueFile;
@@ -453,5 +534,9 @@ begin
     and are just waiting for everything to be played}
     inc(cpuUsageCounter); {record idle time}
   until AVRing.isempty or not dataqueued;
+  if is_param('w') then begin
+    writeB800(param_text('w'));
+    holdPicture;
+  end;
   shutItDown;
 end.

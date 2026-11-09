@@ -22,7 +22,8 @@ achunksize - 2 bytes, word value, size of each audio chunk.
              are in use, because each audio compression method produces
              fixed-size output chunks.
 samprate   - 2 bytes, word value, playback sample rate in Hz
-vidmode    - 1 byte, 1=160x200x16 composite CGA, 2=640x200x2 (others to follow?)
+vidmode    - 1 byte, 1=160x200x16 composite CGA, 2=640x200x2,
+             3=160x200x16 Tandy/PCjr, 5=160x100x16 RGBI text tweak
 numbcols   - 1 byte, width of screenmode in byte columns (ie. 80)
 numprows   - 1 byte, height of screenmode in pixel rows (ie. 200)
 features   - 1 byte, bitfield, reserved for special handling:
@@ -135,6 +136,8 @@ const
   playback is not feasible if we exceed this, even with XT-IDE/CF/DMA cards}
 
   screenmode:byte=0;
+  {0=autodetect, 1=CGA, 2=EGA, 3=VGA. Selects the 160x100 init path.}
+  videoAdapter:byte=0;
 {$IFDEF HP95LX}
   screenbytewidth:byte=30;
   screenbyteheight:byte=128;

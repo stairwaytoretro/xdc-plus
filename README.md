@@ -4,6 +4,10 @@ xdc-plus is an extension of Jim Leonard's (Trixter) XDC (X86 Delta Compiler), ht
 
 Imported upstream commit: 56a5dc1951e1f0b8747fe8fa4614c607e2f91c8b (https://github.com/MobyGamer/XDC, master branch).
 
+Genuine IBM CGA shows snow in 80-column modes; there is no anti-snow handling for now.
+
+DOSBox-X `machine=ega` does not keep Jenner's 200-line switch. The player writes 8 to 0040:0088 (was 9), and the mode set stores 9 again. The 160x100 picture is complete but sits in the top of a 350-line frame, with black below, and the 200-line palette is shown as 64-color EGA (the white border comes out light green). Autodetect on that machine selects EGA, not VGA. That is an emulator limit; the init is not special-cased for it.
+
 ---
 
 XDC
