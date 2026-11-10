@@ -10,17 +10,21 @@ Genuine IBM CGA shows snow in 80-column modes; there is no anti-snow handling fo
 
 ## Screen modes
 
-A compiler script sets `screenmode`. `xdc_comp` stores that value in the `.XDV` header `vidmode`, and `xdc_play` reads it from the header. `/ADAPTER=` only selects the video card in the machine, which matters for mode 5.
+A compiler script sets `screenmode`. `xdc_comp` stores that value in the `.XDV` header `vidmode`, and `xdc_play` reads it from the header. `/ADAPTER=` selects the card only (meaningful for mode 5); do not force CGA on an EGA card. `/ADAPTER=CGA` on an EGA card shows nothing, because an EGA has no CGA mode register at 3D8h. Leave the default autodetect unless detection is wrong.
 
 | `screenmode` | `vidmode` | Mode |
 | --- | --- | --- |
-| 1 | 1 | 160x200x16 CGA composite |
-| 2 | 2 | 640x200x2 |
+| 1 | 1 | 160x200x16 composite (real CGA, composite output) |
+| 2 | 2 | 640x200x2 (CGA, EGA or VGA) |
 | 3 | 3 | 160x200x16 Tandy/PCjr |
-| 4 | 4 | 240x128x2 HP 95LX (upstream, only built with the HP95LX define) |
-| 5 or 160x100 | 5 | 160x100x16 RGBI text tweak (xdc-plus) |
+| 4 | 4 | 240x128x2 HP 95LX |
+| 5 | 5 | 160x100x16 RGBI text tweak (CGA, EGA or VGA) |
 
-DOSBox-X `machine=ega` does not keep Jenner's 200-line switch. The player writes 8 to 0040:0088 (was 9), and the mode set stores 9 again. The 160x100 picture is complete but sits in the top of a 350-line frame, with black below, and the 200-line palette is shown as 64-color EGA (the white border comes out light green). Autodetect on that machine selects EGA, not VGA. That is an emulator limit; the init is not special-cased for it.
+## Hardware test results
+
+On an Atari PC2 (8088, built-in NSI Logic EVC315-S, CGA monitor via CGA2SCART to a Sony Trinitron TV), after a cold boot with the card in CGA mode, no option, `/ADAPTER=AUTO`, and `/ADAPTER=CGA` all display the 160x100 clip correctly. After a warm boot with the card in EGA mode (EGA switches 1110, CGA monitor), no option, `/ADAPTER=AUTO`, and `/ADAPTER=EGA` display correctly, and `/ADAPTER=CGA` shows nothing, as expected. This confirms that Jenner's 200-line switch works on this real EGA. The DOSBox-X 350-line behaviour is an emulator limit.
+
+DOSBox-X `machine=ega` does not keep Jenner's 200-line switch. The player writes 8 to 0040:0088 (was 9), and the mode set stores 9 again. The 160x100 picture is complete but sits in the top of a 350-line frame, with black below, and the 200-line palette is shown as 64-color EGA (the white border comes out light green). Autodetect on that machine selects EGA, not VGA. On the Atari PC2 EGA path above, the same switch does select 200 lines, so this 350-line result is a DOSBox-X limit. The init is not special-cased for the emulator.
 
 ---
 
