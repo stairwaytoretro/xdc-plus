@@ -144,6 +144,7 @@ begin
        or (s='/VGA') or (s='-VGA') then begin
       writeln('Unknown switch: ',paramstr(i));
       writeln('Use /ADAPTER=AUTO, /ADAPTER=CGA, /ADAPTER=EGA, or /ADAPTER=VGA.');
+      flush(Output);
       printHelp;
     end;
     if (copy(s,1,9)='/ADAPTER=') or (copy(s,1,9)='-ADAPTER=') then begin
@@ -156,6 +157,7 @@ begin
         writeln('Unknown video adapter: ',paramstr(i));
         writeln('Use /ADAPTER=AUTO, /ADAPTER=CGA, /ADAPTER=EGA, or /ADAPTER=VGA.');
         writeln('This names the video card in the computer, not the picture format.');
+        flush(Output);
         printHelp;
       end;
     end;
