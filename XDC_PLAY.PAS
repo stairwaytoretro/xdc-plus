@@ -5,10 +5,9 @@
 
 {{$DEFINE HP95LX} {Undefine to add support for an HP95LX}
 
-{SOUNDLIB.PAS was removed upstream. This build paces frames from the PIT
- and does not link the Sound Blaster unit. Undefine SILENT only if that
- unit is available again.}
-{$DEFINE SILENT}
+{Audio is played on a Sound Blaster and the DMA IRQ paces each frame.
+ /NOSOUND (or /q) keeps the PIT-paced silent path. If no card answers,
+ the player prints the reason and tells you to use /NOSOUND.}
 
 {todo:
 -- add left/right skip by +/- 5 secs, 1 minute, 5 minutes
@@ -31,10 +30,8 @@ uses
   support,     {basic support stuff I don't want to include CRT for}
   cmdlin,      {for parsing command-line options}
   tinterrupts, {8253 manipulation routines}
-  dos          {for getintvec/setintvec}
-{$IFNDEF SILENT}
-  ,soundlib    {Sound Blaster detection/setup/init/teardown code}
-{$ENDIF}
+  dos,         {for getintvec/setintvec}
+  xdc_sb       {Sound Blaster detection, DMA playback, teardown}
   ;
 
 const
@@ -66,26 +63,19 @@ const
 
   Int1CSave:pointer=nil;
 
-{$IFDEF SILENT}
-{$F+}
-type
-  TSilentProc=procedure;
-{$F-}
-{$ENDIF}
-
 var
   f:tDosStream;
   header:XDVHeader;
   playp:pointer;
   AVRing:TSlabRing;
   fname:string;
-{$IFDEF SILENT}
-  play:record
-    p:pointer;
-    activeblock:byte;
-    callproc:TSilentProc;
-  end;
-{$ENDIF}
+  timerOn:boolean;
+  videoOn:boolean;
+  int1COn:boolean;
+  breakHooked:boolean;
+  userBreak:boolean;
+  old1B,old23:pointer;
+  savedExit:pointer;
 
 procedure userTickHandler; interrupt;
 begin
@@ -109,7 +99,8 @@ begin
         db 'Usage:  xdc_play <switches> [filename] <switches>',0dh,0ah
         db '  <filename> is the video to play',0dh,0ah
         db '  /? or /h   This help',0dh,0ah
-        db '  /q         Quiet -- pace frames from the PIT, not a sound card',0dh,0ah
+        db '  /NOSOUND   Pace frames from the PIT, no audio',0dh,0ah
+        db '  /q         Same as /NOSOUND',0dh,0ah
         db '  /ADAPTER=xxx  Video card in this computer: AUTO, CGA, EGA, VGA.',0dh,0ah
         db '             AUTO is the default (same as omitting the option).',0dh,0ah
         db '             This selects the card, not the picture format.',0dh,0ah
@@ -129,6 +120,119 @@ begin
   end;
   halt(255);
 end;
+
+function noSoundSwitch:boolean;
+var
+  i:integer;
+  s:string;
+begin
+  noSoundSwitch:=is_param('q');
+  for i:=1 to paramcount do begin
+    s:=upstring(paramstr(i));
+    if (s='/NOSOUND') or (s='-NOSOUND') then noSoundSwitch:=true;
+  end;
+end;
+
+procedure PutVec(n:byte; p:pointer);
+var
+  slot:word;
+begin
+  slot:=word(n) shl 2;
+  MemW[0:slot]:=Ofs(p^);
+  MemW[0:slot+2]:=Seg(p^);
+end;
+
+procedure SilenceTimerDirect;
+var
+  p:pointer;
+begin
+  if not timerOn then exit;
+  {Same channel-0 reload CleanUpTimer uses: mode 2, divisor 0 (18.2 Hz).}
+  Port[$43]:=$34;
+  Port[$40]:=0;
+  Port[$40]:=0;
+  move(BIOSTimerHandler,p,4);
+  PutVec(8,p);
+  timerOn:=false;
+end;
+
+procedure StopDevices;
+begin
+  {Both stops are idempotent. quiet is false until the command line is read,
+   and SBHardStop does nothing until playback has been armed.}
+  if not quiet then SBHardStop;
+  if timerOn then SilenceTimerDirect;
+end;
+
+procedure CallFar(p:pointer);
+begin
+  asm
+    pushf
+    call dword ptr p
+  end;
+end;
+
+procedure Break1B; interrupt;
+begin
+  StopDevices;
+  userBreak:=true;
+  if old1B<>nil then CallFar(old1B);
+end;
+
+procedure Break23; interrupt;
+begin
+  StopDevices;
+  userBreak:=true;
+  if videoOn then begin
+    xdc_donevid;
+    videoOn:=false;
+  end;
+  if int1COn then begin
+    SetIntVec($1C,Int1CSave);
+    int1COn:=false;
+  end;
+  if breakHooked then begin
+    SetIntVec($1B,old1B);
+    SetIntVec($23,old23);
+    breakHooked:=false;
+  end;
+  halt(1);
+end;
+
+procedure HookBreak;
+begin
+  if breakHooked then exit;
+  GetIntVec($1B,old1B);
+  GetIntVec($23,old23);
+  SetIntVec($1B,@Break1B);
+  SetIntVec($23,@Break23);
+  breakHooked:=true;
+end;
+
+procedure UnhookBreak;
+begin
+  if not breakHooked then exit;
+  SetIntVec($1B,old1B);
+  SetIntVec($23,old23);
+  breakHooked:=false;
+end;
+
+{$F+}
+procedure PlayerExit;
+begin
+  ExitProc:=savedExit;
+  StopDevices;
+  if int1COn then begin
+    SetIntVec($1C,Int1CSave);
+    int1COn:=false;
+  end;
+  UnhookBreak;
+  if videoOn then begin
+    xdc_donevid;
+    videoOn:=false;
+  end;
+end;
+{$F-}
 
 procedure readAdapterFlag;
 { /ADAPTER= names the video card in this computer. It does not select
@@ -174,10 +278,7 @@ begin
   readAdapterFlag;
   if is_param('p') then presenting:=true;
   if is_param('d') then showpip:=true;
-  if is_param('q') then quiet:=true;
-{$IFDEF SILENT}
-  quiet:=true;
-{$ENDIF}
+  if noSoundSwitch then quiet:=true;
   if quiet and (not presenting) then
     writeln('Silent playback: frames are paced by the PIT at the source frame rate.');
   if is_param('k') then minDiskRead:=param_int('k');
@@ -196,6 +297,10 @@ begin
   f.read(packetindex^,header.numpackets);
   {seek back to location of first packet}
   f.seek(sizeof(header));
+  if (header.achunksize=0) or (header.achunksize>maxsndChunkSize) then
+    fatalerror(5,'Audio chunk size is zero or larger than 16KB');
+  if header.samplerate<1000 then
+    fatalerror(5,'Audio sample rate is unusable');
   sndbufsize:=header.achunksize*2; {because buffer is actually divided into two IRQ firings}
   realfps:=header.samplerate / header.achunksize;
   intfps:=round(realFPS);
@@ -204,6 +309,7 @@ begin
   {setup and determine cpu idle counter rate}
   GetIntVec($1C,Int1CSave);
   SetIntVec($1C,@userTickHandler);
+  int1COn:=true;
   {see how high counter goes for 1 tick when idle}
   if not presenting then writeln('Calibrating CPU idle counter... ');
   l:=cpuUsageTicks;
@@ -218,6 +324,15 @@ begin
   until cpuUsageTicks >= l+8;
   cpuUsageCounterIdle:=cpuUsageCounterIdle div 8;
 
+  {The ring then owns the rest of the heap, so the DMA buffer has to exist first.}
+  if not quiet then begin
+    setmemsize(sndbufsize);
+    if play.p=nil then begin
+      writeln('Not enough conventional memory for the DMA buffer.');
+      writeln('Use /NOSOUND to play with the timer and no audio.');
+      halt(4);
+    end;
+  end;
   AVRing.init(heapPtr,heapEnd); {from now on, we can't use getmem/new/malloc}
   packetsLeft:=header.numPackets;
   with header do begin
@@ -400,28 +515,37 @@ begin
   DataQueued:=true;
 end;
 
-{$IFNDEF SILENT}
 Procedure primeSoundcard;
-var
-  smult:real;
 begin
   if initblaster <> 0 then begin
-    SetIntVec($01C,Int1CSave); {stop counting ticks}
-    fatalError(4,'Couldn''t initialize Sound Blaster');
+    if int1COn then begin
+      SetIntVec($01C,Int1CSave);
+      int1COn:=false;
+    end;
+    writeln(SBErrorText);
+    halt(4);
   end;
   setmemsize(sndbufsize);
-  {$IFDEF DPMI} {someday we might take advantage of 286 protected mode ram}
-  playp := ptr(play.p,0);
-  {$ELSE}
-  playp := play.p;
-  {$ENDIF}
-
+  if play.p=nil then begin
+    writeln('Not enough conventional memory for the DMA buffer.');
+    writeln('Use /NOSOUND to play with the timer and no audio.');
+    halt(4);
+  end;
+  playp:=play.p;
   fillchar(playp^,sndbufsize,127); {init buffer with silence}
-  play.callproc := soundIntCallerCGA;
+  play.callproc:=soundIntCallerCGA;
   initplay(0,play.p,sndbufsize,header.samplerate,snd_8bit+snd_mono+snd_nonsigned);
+  if SBErrorText<>'' then begin
+    SBHardStop;
+    if int1COn then begin
+      SetIntVec($01C,Int1CSave);
+      int1COn:=false;
+    end;
+    writeln(SBErrorText);
+    halt(4);
+  end;
   if not presenting then writeln(getblasterstring,' initialized.');
 end;
-{$ENDIF}
 
 {$F+}
 procedure noSoundIntCaller; Interrupt;
@@ -445,6 +569,7 @@ procedure primeNoCard; {Instead of sound blaster, we will use the system timer}
 begin
   play.callproc := soundIntCallerCGA;
   SetTimerExact(@noSoundIntCaller,trunc(PITFreq/realfps)); {set to fire at video's framerate}
+  timerOn:=true;
 end;
 
 {$IFDEF HP95LX}
@@ -457,29 +582,25 @@ end;
 
 Procedure shutItDown;
 begin
-  SetIntVec($01C,Int1CSave); {stop counting ticks}
-{$IFDEF SILENT}
-  CleanUpTimer;
-{$ELSE}
-{$IFDEF HP95LX}
-  if not quiet
-    then exitplay; {shutdown Sound Blaster}
-{$ELSE}
-  if quiet
-    then CleanUpTimer {stop our internal "sound" handler}
-    else exitplay; {shutdown Sound Blaster}
-{$ENDIF}
-{$ENDIF}
+  StopDevices;
+  if int1COn then begin
+    SetIntVec($01C,Int1CSave); {stop counting ticks}
+    int1COn:=false;
+  end;
+  UnhookBreak;
 
   if not presenting then begin
-    xdc_donevid;
+    if videoOn then begin
+      xdc_donevid;
+      videoOn:=false;
+    end;
     asm
         push    ds
         jmp     @start
 @message:
-        db 'XDC Player v0.1, 20140520',0dh,0ah
-        db 'All design and code by Trixter / Hornet',0dh,0ah
-        db 'Sound Blaster shell (SB "2.01" ;-) by Stefan Goehler',0dh,0ah
+        db 'XDC Player',0dh,0ah
+        db 'Design and video code by Trixter / Hornet',0dh,0ah
+        db 'Sound Blaster DMA playback paces each frame',0dh,0ah
         db '$'
 @start:
         mov     ax,0900h
@@ -494,8 +615,12 @@ begin
     writeln('CPU was ',(100*(cpuUsageCounter div cpuUsageTicks)) div cpuUsageCounterIdle,'% idle');
     writeln((100*IOUsageTicks) div cpuUsageTicks,'% of total playback time was spent reading from disk');
     writeln('# of elements still in the ring: ',AVRing.numElements);
-  end else
+    writeln('Frames played: ',curPlayPacket);
+    if not quiet then writeln('Sound Blaster IRQs: ',SBIRQCount);
+  end else begin
     xdc_releasevid;
+    videoOn:=false;
+  end;
   AVRing.done;
   freemem(packetindex,header.numpackets);
   if keypressed then repeat readkeychar until not keypressed; {absorb keystroke that was used to exit playback}
@@ -538,10 +663,16 @@ begin
 end;
 
 begin
+  timerOn:=false;
+  videoOn:=false;
+  int1COn:=false;
+  breakHooked:=false;
+  userBreak:=false;
+  savedExit:=ExitProc;
+  ExitProc:=@PlayerExit;
+  HookBreak;
   prepPlayer;
-{$IFDEF SILENT}
-  primeNoCard;
-{$ELSE}
+  if userBreak then halt(1);
   if quiet
 {$IFDEF HP95LX}
     then primeNoCard95LX
@@ -549,16 +680,18 @@ begin
     then primeNoCard
 {$ENDIF}
     else primeSoundcard;
-{$ENDIF}
   xdc_setvid(header.vidmode);
+  videoOn:=true;
   {if not presenting then writeln('Performing initial buffering...');}
   EnqueueFile;
   repeat
     {do nothing, because if we're here, we've loaded everything into RAM
     and are just waiting for everything to be played}
     inc(cpuUsageCounter); {record idle time}
-  until AVRing.isempty or not dataqueued;
-  if is_param('w') then begin
+  until AVRing.isempty or (not dataqueued) or userBreak;
+  {Drop the BIOS Ctrl-Break flag so the statistics writeln is not aborted.}
+  if userBreak then Mem[$0040:$0071]:=Mem[$0040:$0071] and $7F;
+  if is_param('w') and (not userBreak) then begin
     writeB800(param_text('w'));
     holdPicture;
   end;

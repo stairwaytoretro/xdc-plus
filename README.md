@@ -26,6 +26,41 @@ On an Atari PC2 (8088, built-in NSI Logic EVC315-S, CGA monitor via CGA2SCART to
 
 DOSBox-X `machine=ega` does not keep Jenner's 200-line switch. The player writes 8 to 0040:0088 (was 9), and the mode set stores 9 again. The 160x100 picture is complete but sits in the top of a 350-line frame, with black below, and the 200-line palette is shown as 64-color EGA (the white border comes out light green). Autodetect on that machine selects EGA, not VGA. On the Atari PC2 EGA path above, the same switch does select 200 lines, so this 350-line result is a DOSBox-X limit. The init is not special-cased for the emulator.
 
+## Audio
+
+`xdc_play` plays the `.XDV` audio track on a Sound Blaster and uses the DMA IRQ as the frame clock, the same pacing upstream XDC got from `soundlib`. The unit is `XDC_SB.PAS`. It is 8-bit mono unsigned PCM.
+
+```
+SET BLASTER=A220 I7 D1
+XDC_PLAY CLIP.XDV
+```
+
+`A` is the I/O port in hex, `I` is the IRQ, `D` is the 8-bit DMA channel. If `BLASTER` is unset, the player tries `A220 I7 D1`. Supported IRQs are 2, 3, 5, 7, and 9. On an AT, IRQ 2 is the cascade and is serviced as IRQ 9. On an XT there is one 8259, so IRQ 2 stays IRQ 2. DMA 0, 1, and 3 are accepted. Channel 1 is the default. Channel 2 is left for the floppy controller.
+
+DSP 2.00 and newer use auto-init DMA (command `48h`, then `1Ch`). DSP 1.xx has no auto-init, so each IRQ restarts a single-cycle transfer (command `14h`). SB Pro and SB16 are driven with those same 8-bit commands.
+
+The time constant is `256 - 1000000/rate`, using integer division, then clamped:
+
+| DSP | Playback | Rate clamp |
+| --- | --- | --- |
+| 1.xx | single-cycle `14h` | 4000–22222 Hz (time constant 6–211) |
+| 2.xx and 3.xx | auto-init `48h`+`1Ch` | 4000–21739 Hz (time constant 6–210) |
+| 4.xx | auto-init `1Ch` in 8-bit compatible mode | 4000–45454 Hz (time constant 6–234) |
+
+Command `1Ch` is the non-high-speed path. High-speed command `90h` is not used: on DSP 2.xx and 3.xx the chip ignores further commands until a reset, which fights a clean exit. DOSBox-X `sbtype=sb2` enforces the same time-constant cap of 210 unless the high-speed command is used. A clamped file plays a little slow, and the frames follow that clock.
+
+If the DSP does not answer, the player prints the reason and returns to DOS. It does not switch to the timer. Run it again with `/NOSOUND` (or `/q`) to pace frames from the PIT and play no audio:
+
+```
+XDC_PLAY /NOSOUND CLIP.XDV
+```
+
+Exit, a failed start, and Ctrl-Break turn the speaker off, stop DMA, and restore the IRQ vector and the 8259 mask. `/p` still leaves the tweaked video mode up, as before. Without `/p`, exit returns to 80x25 text.
+
+Build `xdc_play` with Turbo Pascal 7 and the default software floating point (`{$N-}`). The player has to run on an 8088 that has no 8087. `MEMORY.PAS` is the real-mode `MemAllocSeg` the compiler gets from Turbo Vision; it is in the source directory so the lab unit path does not need the Turbo Vision tree.
+
+`lab/toneclip.py` builds a 10 second 160x100 clip at 11040 Hz (184 samples per frame, 60 fps, so the compiler does not have to stretch the rate). `lab/clip/CLIP.SCR` is the script. `lab/runsound.sh` plays it in DOSBox-X.
+
 ---
 
 XDC
