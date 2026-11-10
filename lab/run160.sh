@@ -68,9 +68,9 @@ if [[ -z "$MACHINE" ]]; then
 fi
 
 case "$MACHINE" in
-  cga) FLAG=/cga ;;
-  ega) FLAG=/ega ;;
-  vga|vgaonly) MACHINE=vgaonly; FLAG=/vga ;;
+  cga) FLAG=/ADAPTER=CGA ;;
+  ega) FLAG=/ADAPTER=EGA ;;
+  vga|vgaonly) MACHINE=vgaonly; FLAG=/ADAPTER=VGA ;;
   auto) FLAG= ;;
   *) echo "Unknown machine: $MACHINE" >&2; exit 1 ;;
 esac
