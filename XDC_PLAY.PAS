@@ -581,6 +581,8 @@ end;
 {$ENDIF}
 
 Procedure shutItDown;
+var
+  i:byte;
 begin
   StopDevices;
   if int1COn then begin
@@ -623,7 +625,16 @@ begin
   end;
   AVRing.done;
   freemem(packetindex,header.numpackets);
-  if keypressed then repeat readkeychar until not keypressed; {absorb keystroke that was used to exit playback}
+  {A set Ctrl-Break flag makes COMMAND.COM abort the rest of a batch file
+   when this program returns, so the machine looks dead.}
+  Mem[$0040:$0071]:=Mem[$0040:$0071] and $7F;
+  if keypressed then begin
+    i:=0;
+    repeat
+      readkeychar;
+      inc(i);
+    until (not keypressed) or (i=16);
+  end;
 end;
 
 procedure writeB800(s:string);

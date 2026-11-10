@@ -143,6 +143,15 @@ begin
   HexWord := HexDigit(w shr 12) + HexDigit(w shr 8) + HexDigit(w shr 4) + HexDigit(w);
 end;
 
+function HexPort(w: word): string;
+var
+  s: string;
+begin
+  s := HexWord(w);
+  while (length(s) > 1) and (s[1] = '0') do s := copy(s, 2, 255);
+  HexPort := s;
+end;
+
 function Linear(p: pointer): longint;
 begin
   Linear := longint(Seg(p^)) * 16 + Ofs(p^);
@@ -231,7 +240,7 @@ end;
 
 function SettingsText: string;
 begin
-  SettingsText := 'A' + HexWord(basePort) + ' I' + IntStr(irq) + ' D' + IntStr(dma);
+  SettingsText := 'A' + HexPort(basePort) + ' I' + IntStr(irq) + ' D' + IntStr(dma);
 end;
 
 function Fail(msg: string): integer;
@@ -554,9 +563,14 @@ end;
 procedure SBIRQ; interrupt;
 var
   junk: byte;
+  served: boolean;
 begin
-  if not PicInService then exit;
-  {Reading the mixer/DSP status port clears the 8-bit IRQ.}
+  {DOSBox-X often enters this handler with the 8259 in-service bit already
+   clear. Skipping the EOI in that case leaves the card looping a buffer
+   and the frame clock never runs. Acknowledge every entry. The call still
+   returns the PIC to IRR read mode.}
+  served := PicInService;
+  if served then junk := 0 else junk := 1;
   junk := Port[basePort + $E];
   if junk = $FF then junk := 0;
   SendEOI;
@@ -621,7 +635,7 @@ begin
   if useSlave and (irq = 2) then irqName := '2/9' else irqName := IntStr(irq);
   if autoInit then modeName := 'auto-init' else modeName := 'single-cycle';
   cardText := 'DSP ' + IntStr(dspMajor) + '.' + minor +
-    ' at ' + HexWord(basePort) + 'h, IRQ ' + irqName +
+    ' at ' + HexPort(basePort) + 'h, IRQ ' + irqName +
     ', DMA ' + IntStr(dma) + ', ' + modeName;
 end;
 
@@ -650,7 +664,7 @@ begin
     exit;
   end;
   if (basePort < $200) or (basePort > $360) then begin
-    initblaster := Fail('BLASTER port ' + HexWord(basePort) + 'h is out of range.');
+    initblaster := Fail('BLASTER port ' + HexPort(basePort) + 'h is out of range.');
     exit;
   end;
   if not (irq in [2, 3, 5, 7, 9]) then begin
@@ -671,15 +685,15 @@ begin
     exit;
   end;
   if not WriteDSP($E1) then begin
-    initblaster := Fail('DSP at ' + HexWord(basePort) + 'h did not take the version command.');
+    initblaster := Fail('DSP at ' + HexPort(basePort) + 'h did not take the version command.');
     exit;
   end;
   if not ReadDSP(dspMajor) or not ReadDSP(dspMinor) then begin
-    initblaster := Fail('DSP at ' + HexWord(basePort) + 'h did not report a version.');
+    initblaster := Fail('DSP at ' + HexPort(basePort) + 'h did not report a version.');
     exit;
   end;
   if dspMajor = 0 then begin
-    initblaster := Fail('DSP at ' + HexWord(basePort) + 'h reported version 0.0.');
+    initblaster := Fail('DSP at ' + HexPort(basePort) + 'h reported version 0.0.');
     exit;
   end;
   autoInit := dspMajor >= 2;
@@ -779,7 +793,7 @@ begin
       popf
     end;
     SBHardStop;
-    sbError := 'DSP at ' + HexWord(basePort) + 'h rejected the playback command. Use /NOSOUND.';
+    sbError := 'DSP at ' + HexPort(basePort) + 'h rejected the playback command. Use /NOSOUND.';
     exit;
   end;
   asm

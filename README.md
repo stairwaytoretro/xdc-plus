@@ -57,7 +57,7 @@ XDC_PLAY /NOSOUND CLIP.XDV
 
 Exit, a failed start, and Ctrl-Break turn the speaker off, stop DMA, and restore the IRQ vector and the 8259 mask. `/p` still leaves the tweaked video mode up, as before. Without `/p`, exit returns to 80x25 text.
 
-Build `xdc_play` with Turbo Pascal 7 and the default software floating point (`{$N-}`). The player has to run on an 8088 that has no 8087. `MEMORY.PAS` is the real-mode `MemAllocSeg` the compiler gets from Turbo Vision; it is in the source directory so the lab unit path does not need the Turbo Vision tree.
+Build `xdc_play` and `xdc_comp` with Turbo Pascal 7 and the default software floating point (`{$N-}`). The player has to run on an 8088 that has no 8087. `xdc_comp` uses Turbo Vision's `MemAllocSeg` from the Turbo Pascal `MEMORY` unit.
 
 `lab/toneclip.py` builds a 10 second 160x100 clip at 11040 Hz (184 samples per frame, 60 fps, so the compiler does not have to stretch the rate). `lab/clip/CLIP.SCR` is the script. `lab/runsound.sh` plays it in DOSBox-X.
 
