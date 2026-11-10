@@ -110,7 +110,10 @@ begin
         db '  <filename> is the video to play',0dh,0ah
         db '  /? or /h   This help',0dh,0ah
         db '  /q         Quiet -- pace frames from the PIT, not a sound card',0dh,0ah
-        db '  /cga /ega /vga   Force 160x100 RGBI init (default: autodetect)',0dh,0ah
+        db '  /ADAPTER=xxx  Video card in this computer: AUTO, CGA, EGA, VGA.',0dh,0ah
+        db '             AUTO is the default (same as omitting the option).',0dh,0ah
+        db '             This selects the card, not the picture format.',0dh,0ah
+        db '             The format comes from the .XDV header vidmode.',0dh,0ah
         db '  /wNAME     After playback, write 16000 bytes of B800 to NAME',0dh,0ah
         db '  /kN        How much KB to read in a single operation',0dh,0ah
         db '  /p         Presentation mode (no messages, stay in graphics mode)',0dh,0ah
@@ -128,16 +131,34 @@ begin
 end;
 
 procedure readAdapterFlag;
-{Accept /cga, /ega, or /vga. Is_Param only looks at one character.}
+{ /ADAPTER= names the video card in this computer. It does not select
+  the picture format; that comes from the .XDV header vidmode.
+  AUTO is the default and means autodetect. }
 var
   i:integer;
-  s:string;
+  s,val:string;
 begin
   for i:=1 to paramcount do begin
     s:=upstring(paramstr(i));
-    if (s='/CGA') or (s='-CGA') then videoAdapter:=1;
-    if (s='/EGA') or (s='-EGA') then videoAdapter:=2;
-    if (s='/VGA') or (s='-VGA') then videoAdapter:=3;
+    if (s='/CGA') or (s='-CGA') or (s='/EGA') or (s='-EGA')
+       or (s='/VGA') or (s='-VGA') then begin
+      writeln('Unknown switch: ',paramstr(i));
+      writeln('Use /ADAPTER=AUTO, /ADAPTER=CGA, /ADAPTER=EGA, or /ADAPTER=VGA.');
+      printHelp;
+    end;
+    if (copy(s,1,9)='/ADAPTER=') or (copy(s,1,9)='-ADAPTER=') then begin
+      val:=copy(s,10,255);
+      if val='AUTO' then videoAdapter:=0
+      else if val='CGA' then videoAdapter:=1
+      else if val='EGA' then videoAdapter:=2
+      else if val='VGA' then videoAdapter:=3
+      else begin
+        writeln('Unknown video adapter: ',paramstr(i));
+        writeln('Use /ADAPTER=AUTO, /ADAPTER=CGA, /ADAPTER=EGA, or /ADAPTER=VGA.');
+        writeln('This names the video card in the computer, not the picture format.');
+        printHelp;
+      end;
+    end;
   end;
 end;
 
@@ -147,6 +168,8 @@ var
 begin
   {handle user input}
   if (paramcount=0) or is_Param('h') or is_Param('?') then printHelp;
+  {Reject a bad adapter before any mode set or disk read.}
+  readAdapterFlag;
   if is_param('p') then presenting:=true;
   if is_param('d') then showpip:=true;
   if is_param('q') then quiet:=true;
@@ -155,7 +178,6 @@ begin
 {$ENDIF}
   if quiet and (not presenting) then
     writeln('Silent playback: frames are paced by the PIT at the source frame rate.');
-  readAdapterFlag;
   if is_param('k') then minDiskRead:=param_int('k');
   if non_flag_count>0 then fname:=non_flag_param(1);
   if not fileexists(fname) then fatalerror(1,'Filename "'+fname+'" not found');
