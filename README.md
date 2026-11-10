@@ -24,6 +24,8 @@ A compiler script sets `screenmode`. `xdc_comp` stores that value in the `.XDV` 
 
 On an Atari PC2 (8088, built-in NSI Logic EVC315-S, CGA monitor via CGA2SCART to a Sony Trinitron TV), after a cold boot with the card in CGA mode, no option, `/ADAPTER=AUTO`, and `/ADAPTER=CGA` all display the 160x100 clip correctly. After a warm boot with the card in EGA mode (EGA switches 1110, CGA monitor), no option, `/ADAPTER=AUTO`, and `/ADAPTER=EGA` display correctly, and `/ADAPTER=CGA` shows nothing, as expected. This confirms that Jenner's 200-line switch works on this real EGA. The DOSBox-X 350-line behaviour is an emulator limit.
 
+On an IBM PC/AT 5170 with a Morse KP800/16 EGA+VGA card in VGA mode (VGA output through a Guillemot VGA-to-SCART 15 kHz converter), `XDC_PLAY CLIP.XDV`, `/ADAPTER=AUTO`, and `/ADAPTER=VGA` all display the 160x100 clip correctly. Mode 5 is now confirmed on real CGA, EGA, and VGA hardware, with correct autodetection.
+
 DOSBox-X `machine=ega` does not keep Jenner's 200-line switch. The player writes 8 to 0040:0088 (was 9), and the mode set stores 9 again. The 160x100 picture is complete but sits in the top of a 350-line frame, with black below, and the 200-line palette is shown as 64-color EGA (the white border comes out light green). Autodetect on that machine selects EGA, not VGA. On the Atari PC2 EGA path above, the same switch does select 200 lines, so this 350-line result is a DOSBox-X limit. The init is not special-cased for the emulator.
 
 ---
