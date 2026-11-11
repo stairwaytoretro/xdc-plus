@@ -268,6 +268,13 @@ begin
   end;
 end;
 
+procedure writeProjectBanner;
+begin
+  writeln('XDC-Plus player');
+  writeln('Based on XDC by Trixter / Hornet');
+  writeln('Extended by StairwayToRetro, with help from Grok Bot');
+end;
+
 Procedure prepPlayer;
 var
   l:longint;
@@ -305,6 +312,9 @@ begin
   realfps:=header.samplerate / header.achunksize;
   intfps:=round(realFPS);
   if intfps<4 then intfps:=4; if intfps>maxintfps then intfps:=maxintfps;
+
+  {startup screen, before idle calibration and the playback stats}
+  if not presenting then writeProjectBanner;
 
   {setup and determine cpu idle counter rate}
   GetIntVec($1C,Int1CSave);
@@ -596,22 +606,7 @@ begin
       xdc_donevid;
       videoOn:=false;
     end;
-    asm
-        push    ds
-        jmp     @start
-@message:
-        db 'XDC Player',0dh,0ah
-        db 'Design and video code by Trixter / Hornet',0dh,0ah
-        db 'Sound Blaster DMA playback paces each frame',0dh,0ah
-        db '$'
-@start:
-        mov     ax,0900h
-        lea     dx,@message
-        mov     bx,cs
-        mov     ds,bx
-        int     21h
-        pop     ds
-    end;
+    writeProjectBanner;
     writeln('Playback statistics:');
     writeln('# of pauses during playback: ',numPauses);
     writeln('CPU was ',(100*(cpuUsageCounter div cpuUsageTicks)) div cpuUsageCounterIdle,'% idle');

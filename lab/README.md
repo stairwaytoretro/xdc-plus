@@ -1,6 +1,6 @@
 # DOS compilation lab
 
-This folder rebuilds the XDC compiler (`xdc_comp`) with Turbo Pascal 7.0 inside DOSBox-X. The XDC sources are not modified. DOS binaries are launched only inside the emulator.
+This folder rebuilds the XDC-Plus compiler (`xdc_comp`) with Turbo Pascal 7.0 inside DOSBox-X. The sources are not modified by the lab script. DOS binaries are launched only inside the emulator. The player executable remains `XDC_PLAY.EXE`.
 
 ## Prerequisites
 
