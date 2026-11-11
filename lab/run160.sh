@@ -81,7 +81,7 @@ python3 -c 'import sys; from pathlib import Path; data=sys.stdin.buffer.read().r
 @echo off
 o:
 cd \\clip
-o:\\xdc_play.exe /p ${FLAG} /wDUMP.BIN CLIP.XDV
+o:\\xdc_play.exe /NOSOUND /p ${FLAG} /wDUMP.BIN CLIP.XDV
 EOF
 
 cat >"$OUT/session.conf" <<EOF

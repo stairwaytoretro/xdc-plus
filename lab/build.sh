@@ -18,7 +18,7 @@ for arg in "$@"; do
     -h|--help)
       echo "Usage: $0 [tp7.zip|PASCAL.EXE] [play]"
       echo "  tp7.zip or PASCAL.EXE: your own copy of Turbo Pascal 7 (required on the first run)."
-      echo "  play: also tries XDC_PLAY.PAS (fails without SOUNDLIB)."
+      echo "  play: also compiles XDC_PLAY.PAS (links XDC_SB.PAS)."
       exit 0
       ;;
     *)
@@ -177,12 +177,10 @@ if [[ "$PLAY" -eq 1 ]]; then
   fi
   cat "$OUT/PLAY.LOG"
   echo
-  if grep -q "File not found (SOUNDLIB.TPU)" "$OUT/PLAY.LOG"; then
-    echo "Expected failure: SOUNDLIB.TPU is missing (SOUNDLIB.PAS was removed upstream)."
-  elif grep -q "bytes code" "$OUT/PLAY.LOG" && ! grep -q "Error " "$OUT/PLAY.LOG"; then
+  if grep -q "bytes code" "$OUT/PLAY.LOG" && ! grep -q "Error " "$OUT/PLAY.LOG"; then
     echo "XDC_PLAY.EXE was produced."
   else
-    echo "Unexpected XDC_PLAY failure." >&2
+    echo "XDC_PLAY failed to compile." >&2
     exit 1
   fi
 fi

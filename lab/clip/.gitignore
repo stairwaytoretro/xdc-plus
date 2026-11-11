@@ -1,0 +1,13 @@
+# Generated pictures, the WAV, and compiler output. CLIP.SCR is kept.
+*.BMP
+*.bmp
+*.WAV
+*.wav
+*.XDV
+*.xdv
+*.LOG
+*.log
+*.BIN
+*.bin
+*.TXT
+*.txt
