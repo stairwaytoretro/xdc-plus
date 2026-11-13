@@ -35,6 +35,12 @@ uses
   ;
 
 const
+  {One version string, printed by writeProjectBanner on the startup
+   credits and again on the end-of-playback stats. Bump it when a
+   merged change alters the player. A local test build may add a
+   suffix such as v0.1.0-test1; that build is not a release.}
+  playerVersion='v0.1.0';
+
   {samplerate:word=22050;}
   maxsamplerate=45454;   {this is the maximum the Soundblaster Pro/2.0 can do}
   intfps:byte=24;
@@ -270,7 +276,7 @@ end;
 
 procedure writeProjectBanner;
 begin
-  writeln('XDC-Plus player');
+  writeln('XDC-Plus player ',playerVersion);
   writeln('Based on XDC by Trixter / Hornet');
   writeln('Extended by StairwayToRetro, with help from Grok Bot');
 end;
