@@ -2,6 +2,8 @@
 
 XDC-Plus is an extension of Jim Leonard's (Trixter / Hornet) XDC (X86 Delta Compiler), https://github.com/MobyGamer/XDC. @StairwayToRetro maintains it, with help from Grok Bot. Goal: add RGBI video modes, first CGA 160x100x16 (modified text mode), then EGA 320x200x16.
 
+The player is v0.1.0. The version is bumped when a merged pull request changes the player. A local test build may carry a suffix such as `v0.1.0-test1` and is not a release.
+
 Imported upstream commit: 56a5dc1951e1f0b8747fe8fa4614c607e2f91c8b (https://github.com/MobyGamer/XDC, master branch).
 
 Genuine IBM CGA shows snow in 80-column modes; there is no anti-snow handling for now.
