@@ -200,9 +200,11 @@ var
   begin
     opcodepos:=0;
     injectOpcode(movdi); injectWordVal(vofs);
-    {if AL not cached, set new one}
+    {Record the reload on this candidate only. ALcached and lastAL change
+     when the candidate is committed, so the REP STOS candidate sees the
+     same AL as this one.}
     if (lastAL<>d^.fillvalue) or not ALcached then begin
-      injectOpcode(moval); injectbyteVal(d^.fillvalue); ALcached:=true;
+      injectOpcode(moval); injectbyteVal(d^.fillvalue);
       encodes[numEnc].AL:=d^.fillValue;
       encodes[numEnc].modifiedAL:=true;
     end;
@@ -261,7 +263,7 @@ var
       injectWordVal(d^.blength);
     end;
     if (lastAL<>d^.fillvalue) or not ALcached then begin
-      injectOpcode(moval); injectbyteVal(d^.fillvalue); ALcached:=true;
+      injectOpcode(moval); injectbyteVal(d^.fillvalue);
       encodes[numEnc].AL:=d^.fillValue;
       encodes[numEnc].modifiedAL:=true;
     end;

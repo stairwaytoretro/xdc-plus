@@ -767,8 +767,13 @@ var
     move(et.codes,opcodeBufPos^,et.numOpcodeBytes);
     inc(word(opcodeBufPos),et.numOpcodeBytes);
     inc(opcodeBufSize,et.numOpcodeBytes);
-    {if we have opportunity to cache AL, take it}
-    if et.modifiedAL then lastAL:=et.AL;
+    {Only the encoding we actually emit may claim AL. A trial STOS used to
+     set the flag before REP STOS ran, so the shorter form could omit
+     MOV AL while lastAL still held the previous fill.}
+    if et.modifiedAL then begin
+      lastAL:=et.AL;
+      ALcached:=true;
+    end;
     if et.numDataBytes>0 then begin
       p:=nextframe;
       word(p):=pd^.startofs;
@@ -809,8 +814,8 @@ var
 
   procedure emitMapMask(plane:byte);
   {MOV AX,(mask shl 8) or 2; OUT DX,AX. DX is 3C4 from the frame header.
-   One write enables a single plane. AL is destroyed at run time; the
-   caller drops the AL cache before encoding the first delta of the plane.}
+   One write enables a single plane. AL is 2 afterwards. The caller
+   records that before encoding the first delta of the plane.}
   const
     masks:array[0..3] of byte=($01,$02,$04,$08);
   var
@@ -868,7 +873,10 @@ var
           inc(listPos);
           continue;
         end;
-        if not maskOn then ALcached:=false;
+        {The mask is MOV AX,(mask shl 8) or 2, so AL is 2 at the first
+         store of a plane. Later deltas keep whatever commitDelta recorded.}
+        if not maskOn then lastAL:=2;
+        ALcached:=true;
         encodeDelta(dtmp,tmpe);
         extraB:=0;
         extraC:=0;
