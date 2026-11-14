@@ -20,7 +20,7 @@
 {$S+,R+}
 {$ENDIF}
 
-Program xdc_play;
+Program xdp_play;
 
 uses
   xdc_globals,
@@ -102,7 +102,7 @@ begin
         push    ds
         jmp     @start
 @message:
-        db 'Usage:  xdc_play <switches> [filename] <switches>',0dh,0ah
+        db 'Usage:  xdp_play <switches> [filename] <switches>',0dh,0ah
         db '  <filename> is the video to play',0dh,0ah
         db '  /? or /h   This help',0dh,0ah
         db '  /NOSOUND   Pace frames from the PIT, no audio',0dh,0ah

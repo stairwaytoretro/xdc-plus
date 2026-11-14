@@ -1,7 +1,7 @@
 {$R-,S-,G-}
-{Sound Blaster playback for the XDC player.
+{Sound Blaster playback for XDP_PLAY.
 
-This is the small unit XDC_PLAY used to get from the third-party soundlib:
+This is the small unit XDP_PLAY used to get from the third-party soundlib:
 detection, a double-sized DMA buffer, and a per-chunk IRQ that calls
 play.callproc. The IRQ is the playback clock. 8-bit mono unsigned PCM.
 
@@ -23,7 +23,7 @@ unit xdc_sb;
 interface
 
 const
-  {Bit values OR-ed together by XDC_PLAY. Playback is always unsigned
+  {Bit values OR-ed together by XDP_PLAY. Playback is always unsigned
    8-bit mono; the flags are accepted so the call site stays the same.}
   snd_8bit = 1;
   snd_16bit = 2;

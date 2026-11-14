@@ -25,11 +25,11 @@ python3 -c 'import sys; from pathlib import Path; data=sys.stdin.buffer.read().r
 @echo off
 s:
 cd \\
-c:\\tp\\bin\\tpc.exe -UC:\\TP\\UNITS;S:\\UNITS;S:\\TPLIBS\\CGA\\LIB -EO:\\ -B S:\\XDC_PLAY.PAS > O:\\PLAY.LOG
+c:\\tp\\bin\\tpc.exe -UC:\\TP\\UNITS;S:\\UNITS;S:\\TPLIBS\\CGA\\LIB -EO:\\ -B S:\\XDP_PLAY.PAS > O:\\PLAY.LOG
 if errorlevel 1 goto fail
 o:
 cd \\clip
-o:\\xdc_comp.exe CLIP.SCR > O:\\CLIPLOG.TXT
+o:\\xdp_comp.exe CLIP.SCR > O:\\CLIPLOG.TXT
 goto end
 :fail
 echo TPC failed
@@ -46,7 +46,7 @@ play160.bat
 exit
 EOF
 
-echo "Compiling XDC_PLAY and the 160x100 clip..."
+echo "Compiling XDP_PLAY and the 160x100 clip..."
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
   dosbox-x -nogui -nomenu -nopromptfolder -fastlaunch -silent -exit \
   -conf "$CONF" -conf "$OUT/session.conf" -time-limit 180 \
@@ -81,7 +81,7 @@ python3 -c 'import sys; from pathlib import Path; data=sys.stdin.buffer.read().r
 @echo off
 o:
 cd \\clip
-o:\\xdc_play.exe /NOSOUND /p ${FLAG} /wDUMP.BIN CLIP.XDV
+o:\\xdp_play.exe /NOSOUND /p ${FLAG} /wDUMP.BIN CLIP.XDV
 EOF
 
 cat >"$OUT/session.conf" <<EOF
