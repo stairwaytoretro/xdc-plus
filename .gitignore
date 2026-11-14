@@ -1,0 +1,5 @@
+# Turbo Pascal build products. Rebuild with lab/build.sh inside DOSBox-X.
+*.EXE
+*.exe
+*.TPU
+*.tpu

@@ -1,4 +1,4 @@
-program xdc_comp;
+program xdp_comp;
 {$I+}
 
 {
@@ -143,7 +143,7 @@ begin
     push ds
     jmp @start
 @message:
-    db 'Usage:  xdc_comp [input script]',0dh,0ah
+    db 'Usage:  xdp_comp [input script]',0dh,0ah
     db '$'
 @start:
     mov ax,0900h

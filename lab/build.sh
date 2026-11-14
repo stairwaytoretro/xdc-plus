@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Compile XDC_COMP.PAS with Turbo Pascal 7 inside DOSBox-X.
+# Compile XDP_COMP.PAS with Turbo Pascal 7 inside DOSBox-X.
 # DOS binaries are never launched on the host.
 set -euo pipefail
 
@@ -18,7 +18,7 @@ for arg in "$@"; do
     -h|--help)
       echo "Usage: $0 [tp7.zip|PASCAL.EXE] [play]"
       echo "  tp7.zip or PASCAL.EXE: your own copy of Turbo Pascal 7 (required on the first run)."
-      echo "  play: also compiles XDC_PLAY.PAS (links XDC_SB.PAS)."
+      echo "  play: also compiles XDP_PLAY.PAS (links XDC_SB.PAS)."
       exit 0
       ;;
     *)
@@ -117,8 +117,8 @@ emit_crlf "$OUT/BUILD.BAT" <<EOF
 @echo off
 s:
 cd \\
-c:\\tp\\bin\\tpc.exe -UC:\\TP\\UNITS;S:\\UNITS;S:\\TPLIBS\\CGA\\LIB -EO:\\ -B S:\\XDC_COMP.PAS > O:\\COMP.LOG
-o:\\xdc_comp.exe > O:\\HELP.TXT
+c:\\tp\\bin\\tpc.exe -UC:\\TP\\UNITS;S:\\UNITS;S:\\TPLIBS\\CGA\\LIB -EO:\\ -B S:\\XDP_COMP.PAS > O:\\COMP.LOG
+o:\\xdp_comp.exe > O:\\HELP.TXT
 EOF
 
 if [[ "$PLAY" -eq 1 ]]; then
@@ -126,9 +126,9 @@ if [[ "$PLAY" -eq 1 ]]; then
 @echo off
 s:
 cd \\
-c:\\tp\\bin\\tpc.exe -UC:\\TP\\UNITS;S:\\UNITS;S:\\TPLIBS\\CGA\\LIB -EO:\\ -B S:\\XDC_COMP.PAS > O:\\COMP.LOG
-o:\\xdc_comp.exe > O:\\HELP.TXT
-c:\\tp\\bin\\tpc.exe -UC:\\TP\\UNITS;S:\\UNITS;S:\\TPLIBS\\CGA\\LIB -EO:\\ -B S:\\XDC_PLAY.PAS > O:\\PLAY.LOG
+c:\\tp\\bin\\tpc.exe -UC:\\TP\\UNITS;S:\\UNITS;S:\\TPLIBS\\CGA\\LIB -EO:\\ -B S:\\XDP_COMP.PAS > O:\\COMP.LOG
+o:\\xdp_comp.exe > O:\\HELP.TXT
+c:\\tp\\bin\\tpc.exe -UC:\\TP\\UNITS;S:\\UNITS;S:\\TPLIBS\\CGA\\LIB -EO:\\ -B S:\\XDP_PLAY.PAS > O:\\PLAY.LOG
 EOF
 fi
 
@@ -142,11 +142,11 @@ build.bat
 exit
 EOF
 
-echo "Compiling XDC_COMP.PAS..."
+echo "Compiling XDP_COMP.PAS..."
 run_dosbox build
 
 log="$OUT/COMP.LOG"
-exe="$OUT/XDC_COMP.EXE"
+exe="$OUT/XDP_COMP.EXE"
 help="$OUT/HELP.TXT"
 if [[ ! -f "$log" || ! -f "$exe" ]] || ! grep -q "bytes code" "$log"; then
   echo "The compilation failed." >&2
@@ -163,7 +163,7 @@ echo
 echo "===== COMP.LOG ====="
 cat "$log"
 echo
-echo "===== XDC_COMP.EXE with no arguments ====="
+echo "===== XDP_COMP.EXE with no arguments ====="
 cat "$help"
 echo
 echo "Binary: $exe ($(wc -c <"$exe") bytes)"
@@ -177,10 +177,10 @@ if [[ "$PLAY" -eq 1 ]]; then
   fi
   cat "$OUT/PLAY.LOG"
   echo
-  if grep -q "bytes code" "$OUT/PLAY.LOG" && ! grep -q "Error " "$OUT/PLAY.LOG"; then
-    echo "XDC_PLAY.EXE was produced."
+  if [[ -f "$OUT/XDP_PLAY.EXE" ]] && grep -q "bytes code" "$OUT/PLAY.LOG" && ! grep -q "Error " "$OUT/PLAY.LOG"; then
+    echo "XDP_PLAY.EXE was produced."
   else
-    echo "XDC_PLAY failed to compile." >&2
+    echo "XDP_PLAY failed to compile." >&2
     exit 1
   fi
 fi

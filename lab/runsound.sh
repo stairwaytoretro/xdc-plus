@@ -23,7 +23,7 @@ python3 -c 'import sys; from pathlib import Path; data=sys.stdin.buffer.read().r
 @echo off
 s:
 cd \\lab\\clip
-o:\\xdc_comp.exe CLIP.SCR > O:\\MUX.LOG
+o:\\xdp_comp.exe CLIP.SCR > O:\\MUX.LOG
 EOF
 
 cat >"$OUT/session.conf" <<EOF
@@ -79,12 +79,12 @@ run_play() {
     echo '@echo off'
     echo 'set BLASTER=A220 I7 D1'
     echo 'o:\stuffkey.com'
-    echo "o:\\xdc_play.exe ${extra} /wDUMP.BIN s:\\lab\\clip\\CLIP.XDV > O:\\${name}.TXT"
+    echo "o:\\xdp_play.exe ${extra} /wDUMP.BIN s:\\lab\\clip\\CLIP.XDV > O:\\${name}.TXT"
     echo "echo OK> O:\\${name}.OK"
     echo "if exist DUMP.BIN ren DUMP.BIN ${name}.BIN"
     if [[ "$twice" == "yes" ]]; then
       echo 'o:\stuffkey.com'
-      echo "o:\\xdc_play.exe ${extra} s:\\lab\\clip\\CLIP.XDV > O:\\${name}2.TXT"
+      echo "o:\\xdp_play.exe ${extra} s:\\lab\\clip\\CLIP.XDV > O:\\${name}2.TXT"
       echo "echo SECOND> O:\\${name}2.OK"
     fi
   } | python3 -c 'import sys; from pathlib import Path; data=sys.stdin.buffer.read().replace(b"\n", b"\r\n"); Path(sys.argv[1]).write_bytes(data if data.endswith(b"\r\n") else data + b"\r\n")' \

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a 160x100x16 RGBI test clip for the silent XDC player.
+"""Generate a 160x100x16 RGBI test clip for silent XDP_PLAY playback.
 
 Pixel index is the RGBI color (0..15). The compiler packs each pair into
 one text attribute: background = left pixel, foreground = right pixel.

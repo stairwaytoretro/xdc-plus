@@ -2,7 +2,7 @@
 """Build a 10 second 160x100x16 clip with a real 8-bit soundtrack.
 
 The rate is 11040 Hz and the frame rate is 60, so each audio chunk is
-184 bytes and XDC_COMP does not have to stretch the sample rate.
+184 bytes and XDP_COMP does not have to stretch the sample rate.
 A logarithmic sweep from 220 Hz to 1760 Hz runs under the pictures.
 The white bar steps right once per second, so the last frame is obvious.
 

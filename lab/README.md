@@ -1,6 +1,6 @@
 # DOS compilation lab
 
-This folder rebuilds the XDC-Plus compiler (`xdc_comp`) with Turbo Pascal 7.0 inside DOSBox-X. The sources are not modified by the lab script. DOS binaries are launched only inside the emulator. The player executable remains `XDC_PLAY.EXE`.
+This folder rebuilds the XDC-Plus compiler (`xdp_comp`) with Turbo Pascal 7.0 inside DOSBox-X. The sources are not modified by the lab script. DOS binaries are launched only inside the emulator. The player executable is `XDP_PLAY.EXE`.
 
 ## Prerequisites
 
@@ -22,20 +22,20 @@ On the first run, the script:
 
 1. extracts `PASCAL.EXE` from the zip archive with the host zip tool (it is not a DOS binary);
 2. runs `PASCAL.EXE -d -o` inside DOSBox-X, which installs the `TP\` tree into `lab/tp/`;
-3. runs `TPC.EXE` on `XDC_COMP.PAS`, with the units `C:\TP\UNITS`, `UNITS`, and `TPLibs\CGA\LIB`;
-4. runs the produced `XDC_COMP.EXE` with no arguments, and writes the help text to `lab/out/HELP.TXT`.
+3. runs `TPC.EXE` on `XDP_COMP.PAS`, with the units `C:\TP\UNITS`, `UNITS`, and `TPLibs\CGA\LIB`;
+4. runs the produced `XDP_COMP.EXE` with no arguments, and writes the help text to `lab/out/HELP.TXT`.
 
 Later runs reuse `lab/tp/` and no longer need the archive path. To reinstall: `rm -rf lab/tp`.
 
 The compiler log is `lab/out/COMP.LOG`. A successful build ends with a line of the form `4097 lines, … bytes code, … bytes data`, with neither `Error` nor `Warning`.
 
-## Player (`xdc_play`)
+## Player (`xdp_play`)
 
 ```
 ./lab/build.sh play
 ```
 
-`XDC_PLAY.PAS` links `XDC_SB.PAS`. A successful `PLAY.LOG` ends with a `bytes code` line and no `Error`.
+`XDP_PLAY.PAS` links `XDC_SB.PAS`. A successful `PLAY.LOG` ends with a `bytes code` line and no `Error`.
 
 `./lab/run160.sh` still builds the short silent picture test and passes `/NOSOUND`, because that DOSBox profile has no Sound Blaster.
 
@@ -46,7 +46,7 @@ The compiler log is `lab/out/COMP.LOG`. A successful build ends with a line of t
 `S:` is the repository root, `O:` is `lab/out`, `C:\TP` is the Turbo Pascal installation.
 
 ```
-TPC -UC:\TP\UNITS;S:\UNITS;S:\TPLIBS\CGA\LIB -EO:\ -B S:\XDC_COMP.PAS
+TPC -UC:\TP\UNITS;S:\UNITS;S:\TPLIBS\CGA\LIB -EO:\ -B S:\XDP_COMP.PAS
 ```
 
 ## Ignored files
