@@ -60,7 +60,7 @@ const
     $BE,$FF,$FF,     {MOV     SI,FFFF}
     $B8,$00,$A0,     {MOV     AX,A000}
     $8E,$C0,         {MOV     ES,AX  }
-    $BA,$04,$03,     {MOV     DX,03C4}
+    $BA,$C4,$03,     {MOV     DX,03C4}
     $B5,$00,         {MOV     CH,00  }
     $FC              {CLD            }
   );
