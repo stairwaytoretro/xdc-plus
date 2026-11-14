@@ -74,6 +74,10 @@ var
 begin
   Inherited Init;
   if endo<starto then fatalerr('end offset '+inttostr(endo)+' < start offset '+inttostr(starto)+'?');
+  {A REP STOS/MOVS cannot cross planes: offset 8000 is A000:0000 again,
+   on the next plane, not the next address.}
+  if (screenmode=6) and ((starto div egaPlaneBytes)<>(endo div egaPlaneBytes)) then
+    fatalerr('EGA delta crosses a plane boundary');
   startofs:=starto;
   endofs:=endo;
   blength:=1+(endofs-startofs);

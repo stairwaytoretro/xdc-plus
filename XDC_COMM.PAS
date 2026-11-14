@@ -6,6 +6,7 @@ interface
 procedure xdc_setvid(b:byte); {set video mode}
 procedure xdc_donevid; {mode 3, then restore any EGA switch byte}
 procedure xdc_releasevid; {restore the EGA switch byte; leave the CRTC alone}
+function resolvedAdapter:byte; {1=CGA, 2=EGA, 3=VGA; honours /ADAPTER=}
 procedure fatalerr(s:string);
 
 var
@@ -300,9 +301,36 @@ begin
   xdc_releasevid;
 end;
 
+procedure setMode0D;
+{BIOS mode 0Dh: 320x200, 16 colours, four planes at A000. On EGA, the
+ same 200-line switch mode 5 uses so a CGA monitor stays at 15.7 kHz.
+ Write mode 0, bit mask FF, set/reset off: a store replaces the byte in
+ the planes the map mask enables and leaves the other planes alone.
+ The generated frame only changes the map mask.}
+var
+  which:byte;
+begin
+  which:=resolvedAdapter;
+  videoAdapter:=which;
+  if which<2 then
+    fatalerr('Screen mode 6 is 320x200x16 EGA (BIOS mode 0Dh) and needs an EGA or VGA card.');
+  if which=2 then forceEga200;
+  asm
+    mov     ax,000Dh
+    int     10h
+  end;
+  if which=2 then egaSwitchesAfter:=Mem[$0040:$0088];
+  PortW[$3CE]:=$0000; {set/reset = 0}
+  PortW[$3CE]:=$0001; {enable set/reset = 0, CPU data is stored}
+  PortW[$3CE]:=$0003; {rotate/function = 0}
+  PortW[$3CE]:=$0005; {read mode 0, write mode 0}
+  PortW[$3CE]:=$FF08; {bit mask = every pixel in the byte}
+  PortW[$3C4]:=$0F02; {map mask = all four planes until a frame narrows it}
+end;
+
 procedure xdc_setvid(b:byte);
 {1=160x200x16, 2=640x200x2, 3=160x200x16 Tandy/PCjr, 4=240x128x2 HP 95LX,
- 5=160x100x16 RGBI text tweak}
+ 5=160x100x16 RGBI text tweak, 6=320x200x16 EGA planar}
 begin
   case b of
     1:asm
@@ -328,6 +356,7 @@ begin
     end;
 {$ENDIF}
     5:set160x100;
+    6:setMode0D;
   end;
 end;
 

@@ -23,7 +23,8 @@ achunksize - 2 bytes, word value, size of each audio chunk.
              fixed-size output chunks.
 samprate   - 2 bytes, word value, playback sample rate in Hz
 vidmode    - 1 byte, 1=160x200x16 composite CGA, 2=640x200x2,
-             3=160x200x16 Tandy/PCjr, 5=160x100x16 RGBI text tweak
+             3=160x200x16 Tandy/PCjr, 5=160x100x16 RGBI text tweak,
+             6=320x200x16 EGA planar (BIOS mode 0Dh)
 numbcols   - 1 byte, width of screenmode in byte columns (ie. 80)
 numprows   - 1 byte, height of screenmode in pixel rows (ie. 200)
 features   - 1 byte, bitfield, reserved for special handling:
@@ -89,6 +90,17 @@ const
   encodeFPS:real=defaultFPS;  {rate we are actually generating frames at}
   REPMOVSbyteCost=7;          {mov cl; mov di; rep movs}
   REPSTOSbyteCost=9;          {mov al; mov cl; mov di, rep stos}
+
+  {Mode 6 stores four planes back to back. Each plane is the 8 KB the
+   CPU sees at A000:0000 while the sequencer map mask enables that plane.
+   320 pixels / 8 = 40 bytes per scanline, times 200 lines.}
+  egaPlaneBytes=8000;
+  egaFrameBytes=32000;        {4 * egaPlaneBytes}
+  {MOV AX,imm16 (3) + OUT DX,AX (1). 48 cycles is the 8088 OUT plus a
+   generous allowance for EGA sequencer wait states, charged once per
+   plane that a frame actually touches.}
+  mapMaskBytes=4;
+  mapMaskCycles=48;
 
   {global constants that can be tweaked by the user that determine the
   type and amount of optimization:}
