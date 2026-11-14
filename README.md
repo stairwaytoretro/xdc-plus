@@ -1,6 +1,6 @@
 # XDC-Plus
 
-XDC-Plus is an extension of Jim Leonard's (Trixter / Hornet) XDC (X86 Delta Compiler), https://github.com/MobyGamer/XDC. @StairwayToRetro maintains it, with help from Grok Bot. Goal: add RGBI video modes, first CGA 160x100x16 (modified text mode), then EGA 320x200x16.
+XDC-Plus is an extension of Jim Leonard's (Trixter / Hornet) XDC (X86 Delta Compiler), https://github.com/MobyGamer/XDC. @StairwayToRetro maintains it, with help from Grok Bot. RGBI modes: CGA 160x100x16 (modified text mode, screen mode 5) and EGA 320x200x16 (BIOS mode 0Dh, screen mode 6).
 
 The executables were renamed from XDC_PLAY/XDC_COMP to XDP_PLAY/XDP_COMP. Trixter's original XDC shipped those tools as XDC_PLAY and XDC_COMP.
 
@@ -23,6 +23,21 @@ A compiler script sets `screenmode`. `xdp_comp` stores that value in the `.XDV` 
 | 3 | 3 | 160x200x16 Tandy/PCjr |
 | 4 | 4 | 240x128x2 HP 95LX |
 | 5 | 5 | 160x100x16 RGBI text tweak (CGA, EGA or VGA) |
+| 6 | 6 | 320x200x16 EGA planar, BIOS mode 0Dh (EGA or VGA) |
+
+### Mode 6 (EGA 320x200x16)
+
+`screenmode=6` (or `screenmode=320x200`) is BIOS mode 0Dh: 320x200, 16 colours, four bit planes at A000. A scanline is 40 bytes. The compiler buffer is the four planes back to back (32,000 bytes): plane 0 at offset 0, then 8,000, 16,000 and 24,000. Plane 0 is blue, plane 1 green, plane 2 red, plane 3 intensity, which is the default EGA palette in mode 0Dh and the same RGBI colours as CGA (colour 6 is brown). An 8-bit BMP is required. Each palette entry is mapped to the nearest of those 16 colours, so a file painted with the CGA RGBI palette keeps its indices.
+
+The generated code is the same REP STOS / REP MOVS the other modes use, aimed at A000. Deltas are split on plane boundaries and emitted one plane at a time. The plane with the largest remaining delta goes first. Switching planes is one sequencer Map Mask write (`MOV AX,imm16` / `OUT DX,AX` to 3C4h, 4 bytes). A frame does that at most four times, and it skips a plane that has nothing to draw. Write mode 0, bit mask FFh and set/reset off are set once when the mode starts: a store replaces the whole byte in the enabled plane and leaves the other three planes alone, with no read-before-write. Latched copies are not used, because the new pixels come from the CPU, not from video memory.
+
+The cycle budget is the same one modes 1–5 use: half of a 4.77 MHz frame (`76*262*4/2` = 39,824 cycles), scaled by `defaultFPS/sourcefps`. At 60 fps that is about 39,800 cycles. In the compiler's 8088 model a copied byte costs 19.2 cycles and a filled byte costs 13.7, so one frame can copy about 2,070 bytes or fill about 2,900. A map-mask switch is charged 48 cycles. A full 32,000-byte picture does not fit in one frame. Solid colour is cheap, because a run of 00h or FFh in a plane is a REP STOS, and a plane that did not change is not written. Arbitrary picture data takes about 15 frames to converge. The compiler keeps the leftovers and finishes them on the following frames, same as the CGA modes. The colour-bar test picture is 15,616 bytes against black, 15,360 of them runs, which is about six of these frames. Each later step of the square is 384 bytes and fits in one frame.
+
+An 8 MHz 8088 (the Atari PC2) has about 8/4.77 ≈ 1.7 times as many CPU clocks per frame. The compiler does not raise the budget. EGA video memory adds wait states the CGA-derived constants do not measure, so a clip that stays inside this budget is the safe target for that machine, with some spare time if the bus keeps up.
+
+Mode 6 needs EGA or VGA. `/ADAPTER=CGA`, or a machine whose BIOS looks like CGA only, makes the player stop with a message and leave the display in text mode. It does not set mode 0Dh. On EGA the player applies the same 200-line switch as mode 5 (Andrew Jenner: decrement switch nibble 3 or 9) before the BIOS mode set, so mode 0Dh is 200 lines at 15.7 kHz and syncs on a CGA monitor. Exit restores 80x25 text and the original switch byte. `/p` still leaves the graphics mode up. On VGA, mode 0Dh is the BIOS mode, usually 320x200 double-scanned to 400 lines at 70 Hz. A 15 kHz display should use the card's EGA state so the EGA path above is taken. The Morse KP800/16 in its VGA state answers the VGA BIOS call, so AUTO takes that 70 Hz path.
+
+`lab/gen320.py` writes a short synthetic clip: sixteen horizontal colour bars and a 32x32 white square that steps right. `lab/run320.sh /path/to/tp7.zip` builds it with Turbo Pascal and `xdp_comp`. The first picture is held long enough for the runs to finish before the square moves. `/wNAME` on a mode 6 file writes 32,000 bytes, plane 0 then 1, 2 and 3, 40 bytes per scanline. Modes 1–5 still write 16,000 bytes from B800.
 
 ## Hardware test results
 

@@ -81,7 +81,8 @@ waveinput=filename.wav   location of 8-bit PCM audio data
 
 debug=x                  debug level in log.  0=none; 1-3 increases verbosity
 screenmode=xxx           Screen mode of next frame.  1=160x200x16, 2=640x200,
-                         3=Tandy 160x200x16, 5 or 160x100=160x100x16 RGBI.
+                         3=Tandy 160x200x16, 5 or 160x100=160x100x16 RGBI,
+                         6 or 320x200=EGA 320x200x16 planar (BIOS 0Dh).
                          (for the next three, a value of "on" will turn the
                          feature on without changing the value, and a
                          numeric value will set the feature's value.)
@@ -120,8 +121,19 @@ const
 
   maxEncBufSize=10*1024;
 
+  {Default EGA palette in mode 0Dh, which is the CGA RGBI set
+   (colour 6 is brown). BMP colours are mapped to the nearest entry.}
+  egaR:array[0..15] of byte=(
+    $00,$00,$00,$00,$AA,$AA,$AA,$AA,$55,$55,$55,$55,$FF,$FF,$FF,$FF);
+  egaG:array[0..15] of byte=(
+    $00,$00,$AA,$AA,$00,$00,$55,$AA,$55,$55,$FF,$FF,$55,$55,$FF,$FF);
+  egaB:array[0..15] of byte=(
+    $00,$AA,$00,$AA,$00,$AA,$00,$AA,$55,$FF,$55,$FF,$55,$FF,$55,$FF);
+
 var
   deltas:PDeltas;
+  frameAlloc:word; {bytes passed to MemAllocSeg for the two frame buffers}
+  egaPreview:boolean; {true when mode 6 actually set the display}
 
   {encoding buffers and structures:}
   opcodebuf,databuf,picbuf,combinedBuf:pointer;
@@ -162,10 +174,12 @@ begin
   openLogging(basename(paramstr(1))+'.LOG');
   stdout(inttostr(memavail)+ ' bytes free');
 
-  nextframe:=memAllocSeg(screenRAMsize);
-  prevframe:=memAllocSeg(screenRAMsize);
-  fillchar(nextframe^,screenRAMsize,0);
-  fillchar(prevframe^,screenRAMsize,0);
+  frameAlloc:=screenRAMsize;
+  egaPreview:=false;
+  nextframe:=memAllocSeg(frameAlloc);
+  prevframe:=memAllocSeg(frameAlloc);
+  fillchar(nextframe^,frameAlloc,0);
+  fillchar(prevframe^,frameAlloc,0);
   {extremely important that both segments are normalized.  If not, our speed
   optimizations and assumptions will break the code.}
   if (word(nextframe)<>0) or (word(prevframe)<>0)
@@ -262,8 +276,16 @@ begin
   end;
   stdout('Closing down...');
   dispose(deltas,done);
-  freemem(nextframe,screenRAMsize);
-  freemem(prevframe,screenRAMsize);
+  {Mode 6 replaces the buffers, so the freed size is the size MemAllocSeg
+   was last given. Other modes keep the historical screenRAMsize free
+   (mode 5 reports 16000 of a 16384-byte block).}
+  if screenmode=6 then begin
+    freemem(nextframe,frameAlloc);
+    freemem(prevframe,frameAlloc);
+  end else begin
+    freemem(nextframe,screenRAMsize);
+    freemem(prevframe,screenRAMsize);
+  end;
   freemem(opcodeBuf,maxEncBufSize);
   freemem(dataBuf,maxEncBufSize);
   freemem(packetIndex,maxBuf);
@@ -273,6 +295,54 @@ begin
   closeLogging;
 
   xdc_donevid;
+end;
+
+function nearestEga(r,g,b:byte):byte;
+{Nearest of the 16 default EGA colours. A CGA RGBI palette is an identity map.}
+var
+  i,best:byte;
+  dr,dg,db,dist,bestDist:longint;
+begin
+  best:=0;
+  bestDist:=$7FFFFFFF;
+  for i:=0 to 15 do begin
+    dr:=longint(r)-longint(egaR[i]);
+    dg:=longint(g)-longint(egaG[i]);
+    db:=longint(b)-longint(egaB[i]);
+    dist:=dr*dr+dg*dg+db*db;
+    if dist<bestDist then begin
+      bestDist:=dist;
+      best:=i;
+    end;
+  end;
+  nearestEga:=best;
+end;
+
+procedure useEgaFrameBuffers;
+{Replace the 16 KB CGA buffers with 32 KB planar buffers. Called when
+ the script selects screenmode 6, before any frame is loaded.}
+var
+  oldSize:word;
+begin
+  if frameAlloc=egaFrameBytes then begin
+    screenRAMsize:=egaFrameBytes;
+    fillchar(nextframe^,screenRAMsize,0);
+    fillchar(prevframe^,screenRAMsize,0);
+    exit;
+  end;
+  oldSize:=frameAlloc;
+  freemem(nextframe,oldSize);
+  freemem(prevframe,oldSize);
+  frameAlloc:=egaFrameBytes;
+  screenRAMsize:=egaFrameBytes;
+  nextframe:=memAllocSeg(frameAlloc);
+  prevframe:=memAllocSeg(frameAlloc);
+  if (nextframe=nil) or (prevframe=nil) then
+    fatalerr('Not enough memory for 320x200 EGA frame buffers');
+  if (word(nextframe)<>0) or (word(prevframe)<>0) then
+    fatalerr('EGA frame pointers not normalized');
+  fillchar(nextframe^,screenRAMsize,0);
+  fillchar(prevframe^,screenRAMsize,0);
 end;
 
 procedure loadbmp(s:string);
@@ -315,6 +385,13 @@ var
   cellp:^word;
   fs:word;
   lp:longint;
+  map:array[0..255] of byte;
+  row:array[0..319] of byte;
+  ci,stride,rowBase:word;
+  rr,gg,bb,color,b0,b1,b2,b3:byte;
+  bitn:word;
+  y:integer;
+  d0,d1,d2,d3,palb:^byte;
 begin
   fillchar(nextFrame^,screenRAMsize,0);
   assign(f,s);
@@ -462,6 +539,67 @@ begin
         end;
         end;
       end;
+      320:begin
+        {EGA mode 0Dh. 8-bit BMP, palette indices mapped onto the 16
+         default EGA colours. Planes are stored back to back:
+         plane 0 (blue) at 0, green at 8000, red at 16000, intensity
+         at 24000. Each plane is 40 bytes per scanline, linear.
+         The leftmost pixel of a byte is bit 7.}
+        if screenmode<>6 then
+          fatalerr('320x200 bitmap requires screenmode=6');
+        if header2^.bitsPerPixel<>8 then
+          fatalerr('320x200 bitmap uses '+inttostr(header2^.bitsPerPixel)+'-bit pixels; need 8-bit');
+        if header2^.heightInPixels<>200 then
+          fatalerr('320x200 bitmap has '+inttostr(header2^.heightInPixels)+' lines; need 200');
+        sl:=pointer(header2);
+        inc(word(sl),40);
+        palb:=sl;
+        if (header2^.numColors<=0) or (header2^.numColors>256) then w:=256
+          else w:=word(header2^.numColors);
+        for ci:=0 to 255 do map[ci]:=0;
+        for ci:=0 to w-1 do begin
+          bb:=palb^; inc(word(palb));
+          gg:=palb^; inc(word(palb));
+          rr:=palb^; inc(word(palb));
+          inc(word(palb)); {reserved}
+          map[ci]:=nearestEga(rr,gg,bb);
+        end;
+        sl:=palb;
+        {8-bit rows are padded to a multiple of 4. 320 already is.}
+        stride:=320;
+        if longint(word(sl))+longint(stride)*200>fs then
+          fatalerr('320x200 bitmap is truncated');
+        {File is bottom-up. The first stored row is screen line 199.}
+        for y:=199 downto 0 do begin
+          move(sl^,row,320);
+          sl:=addptr(sl,stride);
+          rowBase:=word(y)*word(40);
+          d0:=nextframe; inc(word(d0),rowBase);
+          d1:=nextframe; inc(word(d1),8000); inc(word(d1),rowBase);
+          d2:=nextframe; inc(word(d2),16000); inc(word(d2),rowBase);
+          d3:=nextframe; inc(word(d3),24000); inc(word(d3),rowBase);
+          ci:=0;
+          while ci<320 do begin
+            b0:=0; b1:=0; b2:=0; b3:=0;
+            for bitn:=0 to 7 do begin
+              color:=map[row[ci]];
+              inc(ci);
+              b0:=lo(word(b0) shl 1);
+              b1:=lo(word(b1) shl 1);
+              b2:=lo(word(b2) shl 1);
+              b3:=lo(word(b3) shl 1);
+              if (color and 1)<>0 then b0:=b0 or 1;
+              if (color and 2)<>0 then b1:=b1 or 1;
+              if (color and 4)<>0 then b2:=b2 or 1;
+              if (color and 8)<>0 then b3:=b3 or 1;
+            end;
+            d0^:=b0; inc(word(d0));
+            d1^:=b1; inc(word(d1));
+            d2^:=b2; inc(word(d2));
+            d3^:=b3; inc(word(d3));
+          end;
+        end;
+      end;
       240:begin
         {make sure this is a 240x128 pic with 1-bit pixels}
         if header2^.bitsPerPixel<>1
@@ -502,7 +640,10 @@ begin
         end;
       end;
     else
-      fatalerr('Not a resolution we handle (yet)');
+      if screenmode=6 then
+        fatalerr('Mode 6 needs a 320x200 8-bit bitmap')
+      else
+        fatalerr('Not a resolution we handle (yet)');
     end;
 
   end;
@@ -524,6 +665,32 @@ platforms, you'll have to rewrite this procedure!
 var
   foundStart,foundEnd,endbuf,newstart,lastfound:word;
   foosrc,foodest:pointer;
+
+  procedure insertSpan(a,b:word);
+  {Mode 6 deltas have to stop on a plane boundary. A linear REP across
+   that boundary would wrap to A000:0000 on the next plane.
+   The end offset is computed in longint so 4*8000 does not overflow
+   a signed 16-bit intermediate.}
+  var
+    nb:longint;
+    planeEnd:word;
+  begin
+    if screenmode<>6 then begin
+      deltas^.Insert(new(pDelta,init(a,b)));
+      exit;
+    end;
+    if a>=screenRAMsize then exit;
+    if b>=screenRAMsize then b:=screenRAMsize-1;
+    while (longint(a) div egaPlaneBytes)<>(longint(b) div egaPlaneBytes) do begin
+      nb:=(longint(a) div egaPlaneBytes)+1;
+      nb:=nb*longint(egaPlaneBytes)-1;
+      planeEnd:=word(nb);
+      deltas^.Insert(new(pDelta,init(a,planeEnd)));
+      a:=word(nb+1);
+    end;
+    if a<=b then deltas^.Insert(new(pDelta,init(a,b)));
+  end;
+
 begin
   endbuf:=screenRAMsize+1; {to ensure we compare the last byte in the buffer}
   foundstart:=0;
@@ -558,7 +725,7 @@ begin
     if (foundstart=0) and (foundend=0) and (endbuf=0)
       then stdout('frame is identical to previous')
       else if lastfound<>foundstart then begin
-        deltas^.Insert(new(pDelta,init(foundStart,foundEnd)));
+        insertSpan(foundStart,foundEnd);
         lastfound:=foundstart;
       end;
   until endbuf=0;
@@ -595,7 +762,7 @@ var
   procedure commitDelta(pd:pdelta;et:tEncodeTarget);
   {Copy opcodes/data to respective buffers; adjust bandwidth pools appropriately}
   var
-    p:pointer;
+    p,q:pointer;
   begin
     move(et.codes,opcodeBufPos^,et.numOpcodeBytes);
     inc(word(opcodeBufPos),et.numOpcodeBytes);
@@ -608,6 +775,16 @@ var
       move(p^,databufpos^,et.numDataBytes);
       inc(word(databufpos),et.numDataBytes);
       inc(dataBufSize,et.numDataBytes);
+    end;
+    {Mode 6 does not read the picture back from B800. The bytes just
+     committed are exactly what the generated stores write into A000,
+     so keep prevframe in step here.}
+    if screenmode=6 then begin
+      p:=nextframe;
+      word(p):=pd^.startofs;
+      q:=prevframe;
+      word(q):=pd^.startofs;
+      move(p^,q^,pd^.blength);
     end;
     cyclePool:=cyclePool-et.totalCycles;
     bytePool:=bytePool-et.totalBytes;
@@ -630,9 +807,92 @@ var
     deltas^.free(pd);
   end;
 
+  procedure emitMapMask(plane:byte);
+  {MOV AX,(mask shl 8) or 2; OUT DX,AX. DX is 3C4 from the frame header.
+   One write enables a single plane. AL is destroyed at run time; the
+   caller drops the AL cache before encoding the first delta of the plane.}
+  const
+    masks:array[0..3] of byte=($01,$02,$04,$08);
+  var
+    b:^byte;
+  begin
+    if plane>3 then fatalerr('EGA plane number out of range');
+    b:=opcodeBufPos;
+    b^:=$B8; inc(word(b));
+    b^:=$02; inc(word(b));
+    b^:=masks[plane]; inc(word(b));
+    b^:=$EF; inc(word(b));
+    opcodeBufPos:=b;
+    inc(opcodeBufSize,mapMaskBytes);
+    cyclePool:=cyclePool-mapMaskCycles;
+    bytePool:=bytePool-mapMaskBytes;
+  end;
+
+  procedure encodeEgaPlanes;
+  {Largest remaining delta picks the plane. Every delta of that plane
+   that fits is emitted before the next map-mask write, so a frame
+   switches planes at most four times.}
+  var
+    pass,plane,bestPlane:byte;
+    bestLen:word;
+    seen:array[0..3] of boolean;
+    maskOn:boolean;
+    scan:integer;
+    dscan:pdelta;
+    extraB:word;
+    extraC:real;
+  begin
+    for plane:=0 to 3 do seen[plane]:=false;
+    for pass:=0 to 3 do begin
+      bestLen:=0;
+      bestPlane:=0;
+      if deltas^.count=0 then break;
+      for plane:=0 to 3 do if not seen[plane] then begin
+        for scan:=0 to deltas^.count-1 do begin
+          dscan:=pdelta(deltas^.at(scan));
+          if byte(longint(dscan^.startofs) div egaPlaneBytes)=plane then
+            if dscan^.blength>bestLen then begin
+              bestLen:=dscan^.blength;
+              bestPlane:=plane;
+            end;
+        end;
+      end;
+      if bestLen=0 then break;
+      seen[bestPlane]:=true;
+      maskOn:=false;
+      listPos:=0;
+      while deltas^.count>0 do begin
+        if integer(listPos)>=deltas^.count then break;
+        dtmp:=pdelta(deltas^.at(listPos));
+        if byte(longint(dtmp^.startofs) div egaPlaneBytes)<>bestPlane then begin
+          inc(listPos);
+          continue;
+        end;
+        if not maskOn then ALcached:=false;
+        encodeDelta(dtmp,tmpe);
+        extraB:=0;
+        extraC:=0;
+        if not maskOn then begin
+          extraB:=mapMaskBytes;
+          extraC:=mapMaskCycles;
+        end;
+        if (longint(tmpe.totalBytes)+extraB<=bytePool)
+        and (tmpe.totalCycles+extraC<cyclePool) then begin
+          if not maskOn then begin
+            emitMapMask(bestPlane);
+            maskOn:=true;
+          end;
+          commitDelta(dtmp,tmpe);
+        end else
+          inc(listPos);
+      end;
+    end;
+  end;
+
 begin
   cyclePool:=cyclesPerFrame;
-  bytePool:=maxVChunk-frameByteOverhead;
+  if screenmode=6 then bytePool:=maxVChunk-egaFrameOverhead
+    else bytePool:=maxVChunk-frameByteOverhead;
   opcodeBufSize:=0; dataBufSize:=0;
   opcodeBufPos:=opcodebuf; dataBufPos:=databuf;
   listPos:=0;
@@ -643,14 +903,21 @@ begin
   fillchar(opcodebuf^,maxEncBufSize,0);
 
   {inject frame header}
-  move(frameHeaderCode,opcodeBufPos^,frameheaderLen);
-  inc(word(opcodeBufPos),frameHeaderLen);
-  inc(opcodeBufSize,frameHeaderLen);
+  if screenmode=6 then begin
+    move(egaFrameHeaderCode,opcodeBufPos^,egaFrameHeaderLen);
+    inc(word(opcodeBufPos),egaFrameHeaderLen);
+    inc(opcodeBufSize,egaFrameHeaderLen);
+  end else begin
+    move(frameHeaderCode,opcodeBufPos^,frameheaderLen);
+    inc(word(opcodeBufPos),frameHeaderLen);
+    inc(opcodeBufSize,frameHeaderLen);
+  end;
 
   {Scan delta list top to bottom, so that we can encode the larger deltas first.  If we
   have an empty delta list (ie. nextframe=prevframe), this will do nothing.}
   ALcached:=false;
-  while (deltas^.count>0) and (listPos<deltas^.Count) do begin
+  if screenmode=6 then encodeEgaPlanes
+  else while (deltas^.count>0) and (listPos<deltas^.Count) do begin
     dtmp:=pdelta(deltas^.at(listPos));
     encodeDelta(dtmp,tmpe);
     if (tmpe.totalBytes <= bytePool)
@@ -660,13 +927,19 @@ begin
   end;
 
   {inject frame footer.  Requires normalized pointers.}
-  move(frameFooterCode,opcodebufPos^,frameFooterLen);
-  inc(word(opcodeBufPos),frameFooterLen);
-  inc(opcodeBufSize,frameFooterLen);
+  if screenmode=6 then begin
+    move(egaFrameFooterCode,opcodebufPos^,egaFrameFooterLen);
+    inc(word(opcodeBufPos),egaFrameFooterLen);
+    inc(opcodeBufSize,egaFrameFooterLen);
+  end else begin
+    move(frameFooterCode,opcodebufPos^,frameFooterLen);
+    inc(word(opcodeBufPos),frameFooterLen);
+    inc(opcodeBufSize,frameFooterLen);
+  end;
   if (word(opcodeBufPos)<>opcodeBufSize) then fatalerr('opcode pointer/size mismatch');
   if (word(dataBufPos)<>dataBufSize) then fatalerr('data pointer/size mismatch');
   inc(numEncodedFrames);
-  if screenmode=5 then
+  if (screenmode=5) or (screenmode=6) then
     stdout('Frame '+inttostr(numEncodedFrames)
       +': '+inttostr(opcodeBufSize+dataBufSize)+' bytes, '
       +realtostr(cyclesPerFrame-cyclePool)+' cycles, '
@@ -967,6 +1240,14 @@ var
           continue;
         end;
 
+        {Joining across a plane boundary would build one REP that the
+         A000 window cannot execute. Leave the two slices apart.}
+        if (screenmode=6) and
+           ((dcand1^.startofs div egaPlaneBytes)<>(dcand2^.endofs div egaPlaneBytes)) then begin
+          inc(didx);
+          continue;
+        end;
+
         {sanity checks}
         if (dcand1^.startofs=dcand2^.startofs) or (dcand1=dcand2) then begin
           stderr('Attempted to compare duplicates: ');
@@ -1018,6 +1299,33 @@ begin
   ShaveTinyDeltas;
 end;
 
+procedure checkEgaReadback;
+{The generated code just ran against a real EGA/VGA mode 0Dh. Read each
+ plane back and compare it with prevframe, which commitDelta updated
+ with the same bytes. A mismatch means the stores or the map mask are wrong.}
+var
+  plane:byte;
+  i,off:word;
+  v,p:^byte;
+begin
+  off:=0;
+  for plane:=0 to 3 do begin
+    PortW[$3CE]:=(word(plane) shl 8) or 4; {read map select}
+    v:=Ptr($A000,0);
+    p:=prevframe;
+    inc(word(p),off);
+    for i:=0 to egaPlaneBytes-1 do begin
+      if v^<>p^ then
+        fatalerr('Mode 6 readback mismatch, plane '+inttostr(plane)
+          +' offset '+inttostr(i)
+          +' screen='+inttostr(v^)+' encoded='+inttostr(p^));
+      inc(word(v));
+      inc(word(p));
+    end;
+    if plane<3 then inc(off,egaPlaneBytes);
+  end;
+end;
+
 procedure saveDeltas(fname:string);
 {translate our opcode and data buffers into a single code segment, then
 combine with audio data and dump to disk.
@@ -1047,7 +1355,8 @@ begin
   move(dataBuf^,p^,dataBufSize);
   {perform fixup on where data segment is}
   pw:=combinedBuf;
-  inc(word(pw),4);
+  if screenmode=6 then inc(word(pw),egaSiFixup)
+    else inc(word(pw),4);
   pw^:=opcodeBufSize;
   {perform fixup on where video memory is}
 {$IFDEF HP95LX}
@@ -1079,6 +1388,7 @@ begin
   asm
     call combinedBuf
   end;
+  if (screenmode=6) and egaPreview then checkEgaReadback;
   freemem(combinedBuf,maxEncBufSize*2);
   {update packet index}
   packetIndex^[numEncodedFrames-1]:=packetSize div secSize; {/512}
@@ -1260,8 +1570,34 @@ begin
           +realtostr(cyclesperframe)+' cycles per frame');
       end;
       if key='SCREENMODE' then begin
-        {1=160x200x16  2=640x200x2  3=Tandy  5=160x100x16 RGBI}
-        if (value='5') or (value='160X100') then begin
+        {1=160x200x16  2=640x200x2  3=Tandy  5=160x100x16 RGBI
+         6=EGA 320x200x16 planar}
+        if (value='6') or (value='320X200') then begin
+          foundKeyPair:=true;
+          useEgaFrameBuffers;
+          screenmode:=6;
+          screenbytewidth:=40;
+          screenbyteheight:=200;
+          pixelBitDepth:=1;
+          if resolvedAdapter>=2 then begin
+            xdc_setvid(screenmode);
+            egaPreview:=true;
+          end else begin
+            egaPreview:=false;
+            stdout('No EGA/VGA detected; encoding mode 6 without switching the display.');
+          end;
+          with tmpHeader do begin
+            vidmode:=screenmode;
+            numbcols:=screenbytewidth;
+            numprows:=screenbyteheight;
+          end;
+          if muxing then begin
+            seek(muxf,0);
+            blockwrite(muxf,tmpHeader,sizeof(tmpHeader),w);
+            seek(muxf,filesize(muxf));
+          end;
+          stdout('Screen mode 6: EGA 320x200x16, four planes of 8000 bytes at A000');
+        end else if (value='5') or (value='160X100') then begin
           foundKeyPair:=true;
           screenmode:=5;
           screenbytewidth:=160;
@@ -1358,7 +1694,7 @@ begin
     {execute what we just encoded to CGA RAM}
     {executeDeltas; actually this is handled by saveDeltas}
     {save resulting frame for next comparison iteration}
-    move(CGARAM^,prevFrame^,screenRAMSize);
+    if screenmode<>6 then move(CGARAM^,prevFrame^,screenRAMSize);
     {logic error detection:  If we had N deltas before encoding+saving, and
     for some reason still have N deltas afterwards, then the delta list
     is invalid and we must do something about it.

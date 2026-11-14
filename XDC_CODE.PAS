@@ -45,6 +45,33 @@ const
   frameByteOverhead=frameHeaderLen+frameFooterLen;
   frameCycleOverhead=frameHeaderCycles+frameFooterCycles;
 
+  {Mode 6 header. ES is A000 (planar window), DX is kept at the sequencer
+   index port so a plane switch is MOV AX,imm / OUT DX,AX. DX is saved
+   because this routine runs from the audio IRQ, which still needs DX.
+   The MOV SI immediate is at egaSiFixup, same fixup saveDeltas does
+   for the B800 header (that immediate lives at offset 4).}
+  egaFrameHeaderLen=18;
+  egaSiFixup=5;
+  egaFrameHeaderCode:array[0..egaFrameHeaderLen-1] of byte=(
+    $52,             {PUSH    DX     }
+    $1E,             {PUSH    DS     }
+    $0E,             {PUSH    CS     }
+    $1F,             {POP     DS     }
+    $BE,$FF,$FF,     {MOV     SI,FFFF}
+    $B8,$00,$A0,     {MOV     AX,A000}
+    $8E,$C0,         {MOV     ES,AX  }
+    $BA,$04,$03,     {MOV     DX,03C4}
+    $B5,$00,         {MOV     CH,00  }
+    $FC              {CLD            }
+  );
+  egaFrameFooterLen=3;
+  egaFrameFooterCode:array[0..egaFrameFooterLen-1] of byte=(
+    $1F,             {POP     DS     }
+    $5A,             {POP     DX     }
+    $CB              {RETF           }
+  );
+  egaFrameOverhead=egaFrameHeaderLen+egaFrameFooterLen;
+
 
 
 type
@@ -142,6 +169,7 @@ var
   encodes:array[0..4] of TEncodeTarget;
   b,numEnc:byte;
   opcodepos:byte;
+  vofs:word; {DI immediate. Mode 6 collapses a plane-buffer offset into A000.}
 
   procedure injectOpcode(o:opcodeList);
   begin
@@ -171,7 +199,7 @@ var
     loop:byte;
   begin
     opcodepos:=0;
-    injectOpcode(movdi); injectWordVal(d^.startofs);
+    injectOpcode(movdi); injectWordVal(vofs);
     {if AL not cached, set new one}
     if (lastAL<>d^.fillvalue) or not ALcached then begin
       injectOpcode(moval); injectbyteVal(d^.fillvalue); ALcached:=true;
@@ -187,7 +215,7 @@ var
   procedure encodeMOVS;
   begin
     opcodepos:=0;
-    injectOpcode(movdi); injectWordVal(d^.startofs);
+    injectOpcode(movdi); injectWordVal(vofs);
     case d^.blength of
       1:begin
         injectOpcode(movsb);
@@ -224,7 +252,7 @@ var
   procedure encodeREPSTOS;
   begin
     opcodepos:=0;
-    injectOpcode(movdi); injectWordVal(d^.startofs);
+    injectOpcode(movdi); injectWordVal(vofs);
     if (d^.blength<=255) then begin
       injectOpcode(movcl);
       injectByteVal(d^.blength);
@@ -248,7 +276,7 @@ var
   procedure encodeREPMOVS;
   begin
     opcodepos:=0;
-    injectOpcode(movdi); injectWordVal(d^.startofs);
+    injectOpcode(movdi); injectWordVal(vofs);
     if (d^.blength<=255) then begin
       injectOpcode(movcl);
       injectByteVal(d^.blength);
@@ -277,8 +305,9 @@ var
         injectOpcode(es);
         injectOpcode(movbpmem1);
         injectOpcode(movbpmem2);
-        injectWordVal(d^.startofs);
-        pb:=prevframe;
+        injectWordVal(vofs);
+        {Mode 6 stores the new byte. Other modes keep the historical source.}
+        if screenmode=6 then pb:=nextframe else pb:=prevframe;
         word(pb):=d^.startofs;
         injectByteVal(pb^);
       end;
@@ -286,8 +315,8 @@ var
         injectOpcode(es);
         injectOpcode(movwpmem1);
         injectOpcode(movwpmem2);
-        injectWordVal(d^.startofs);
-        pw:=prevframe;
+        injectWordVal(vofs);
+        if screenmode=6 then pw:=nextframe else pw:=prevframe;
         word(pw):=d^.startofs;
         injectWordVal(pw^);
       end;
@@ -308,6 +337,10 @@ begin
   enc.totalCycles:=totalCyclesPerFrame;
   enc.modifiedAL:=false;
   numEnc:=0;
+  {All four planes share A000:0000. The buffer offset names the plane
+   in the high part and the video offset in the low 8000 bytes.}
+  if screenmode=6 then vofs:=d^.startofs mod egaPlaneBytes
+    else vofs:=d^.startofs;
 
   {encode in every way that makes sense}
   if d^.dtype=run then begin

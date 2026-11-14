@@ -111,7 +111,8 @@ begin
         db '             AUTO is the default (same as omitting the option).',0dh,0ah
         db '             This selects the card, not the picture format.',0dh,0ah
         db '             The format comes from the .XDV header vidmode.',0dh,0ah
-        db '  /wNAME     After playback, write 16000 bytes of B800 to NAME',0dh,0ah
+        db '             vidmode 6 (320x200x16) needs EGA or VGA.',0dh,0ah
+        db '  /wNAME     After playback, write the screen buffer to NAME.',0dh,0ah
         db '  /kN        How much KB to read in a single operation',0dh,0ah
         db '  /p         Presentation mode (no messages, stay in graphics mode)',0dh,0ah
         db '  /d         Displays queue depth indicator',0dh,0ah
@@ -304,6 +305,14 @@ begin
   f.read(header,sizeof(header));
   if header.signature[0]<>'X' {header should start with XDCV}
     then fatalerror(127,'Header signature doesn''t indicate XDCV file...');
+  if header.vidmode=6 then
+    if resolvedAdapter<2 then begin
+      writeln('Screen mode 6 is 320x200x16 EGA (BIOS mode 0Dh).');
+      writeln('It needs an EGA or VGA card. /ADAPTER=CGA was given, or this');
+      writeln('computer has no EGA/VGA. Playback was not started.');
+      flush(Output);
+      halt(1);
+    end;
   {load packet index}
   getmem(packetindex,header.numpackets);
   f.seek(f.getsize-header.numpackets);
@@ -640,22 +649,34 @@ end;
 
 procedure writeB800(s:string);
 type
+  TPlane=array[0..7999] of byte;
   TVid=array[0..15999] of byte;
-  PVid=^TVid;
 var
   outf:file;
   note:text;
-  vid:PVid;
+  plane:byte;
+  planeP:^TPlane;
+  vid:^TVid;
 begin
-  vid:=Ptr($B800,0);
   assign(outf,s);
   rewrite(outf,1);
-  blockwrite(outf,vid^,16000);
+  if header.vidmode=6 then begin
+    {32000 bytes: plane 0, then 1, then 2, then 3. 40 bytes per line.}
+    planeP:=Ptr($A000,0);
+    for plane:=0 to 3 do begin
+      PortW[$3CE]:=(word(plane) shl 8) or 4;
+      blockwrite(outf,planeP^,egaPlaneBytes);
+    end;
+  end else begin
+    vid:=Ptr($B800,0);
+    blockwrite(outf,vid^,16000);
+  end;
   close(outf);
   assign(note,'NOTE.TXT');
   rewrite(note);
   writeln(note,'adapter=',videoAdapter);
   writeln(note,'switches=',Mem[$0040:$0088]);
+  if header.vidmode=6 then writeln(note,'vidmode=6');
   if egaSwitchesSaved then begin
     writeln(note,'switches_orig=',egaSwitchesOrig);
     writeln(note,'switches_forced=',egaSwitchesForced);

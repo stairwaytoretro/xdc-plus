@@ -39,6 +39,8 @@ The compiler log is `lab/out/COMP.LOG`. A successful build ends with a line of t
 
 `./lab/run160.sh` still builds the short silent picture test and passes `/NOSOUND`, because that DOSBox profile has no Sound Blaster.
 
+`lab/gen320.py` writes a 320x200x16 clip (colour bars and a moving square) for screen mode 6. `./lab/run320.sh /path/to/tp7.zip` compiles it. Playback wants EGA or VGA; `/ADAPTER=CGA` makes the player refuse.
+
 `./lab/runsound.sh /path/to/tp7.zip` builds the 10 second clip from `lab/toneclip.py`, then checks three DOSBox-X runs: `sbtype=sb2` on `machine=cga`, `/NOSOUND`, and `sbtype=none` (the player must name `/NOSOUND` and return to the prompt).
 
 ## TPC command
