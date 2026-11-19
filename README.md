@@ -118,9 +118,19 @@ XDP_PLAY /NOSOUND CLIP.XDV
 
 Exit, a failed start, and Ctrl-Break turn the speaker off, stop DMA, and restore the IRQ vector and the 8259 mask. `/p` still leaves the tweaked video mode up, as before; `/r` returns to the text prompt. With no switch, exit returns to the startup text mode (80x25 in practice).
 
-Build `xdp_play` and `xdp_comp` with Turbo Pascal 7 and the default software floating point (`{$N-}`). The player has to run on an 8088 that has no 8087. `xdp_comp` uses Turbo Vision's `MemAllocSeg` from the Turbo Pascal `MEMORY` unit.
+Build `xdp_play` and `xdp_comp` with Turbo Pascal 7 and the default software floating point (`{$N-}`). Turbo Pascal 7 is not included. The player has to run on an 8088 that has no 8087. `xdp_comp` uses Turbo Vision's `MemAllocSeg` from the Turbo Pascal `MEMORY` unit.
 
 `lab/toneclip.py` builds a 10 second 160x100 clip at 11040 Hz (184 samples per frame, 60 fps, so the compiler does not have to stretch the rate). `lab/clip/CLIP.SCR` is the script. `lab/runsound.sh` plays it in DOSBox-X.
+
+## Related work
+
+[Scali (Scalibq)](https://github.com/Scalibq/XDC) independently forked XDC in late 2023 and added PC speaker, Covox, Tandy/PCjr and Sound Blaster 1.x playback to the player. His write-up is [Video playback (with audio) on low-end MS-DOS machines](https://scalibq.wordpress.com/2024/01/01/video-playback-on-low-end-ms-dos-machines/). XDC-Plus is a separate project and does not use code from that fork.
+
+## Licence
+
+XDC-Plus is based on XDC by Jim Leonard (Trixter / Hornet) and extended by @StairwayToRetro, with help from Grok Bot.
+
+Released under the MIT License: Copyright (c) 2014 Jim Leonard; Copyright (c) 2026 StairwayToRetro (XDC-Plus changes). See [LICENSE](LICENSE) and [THIRD_PARTY.md](THIRD_PARTY.md).
 
 ---
 
