@@ -122,6 +122,10 @@ Build `xdp_play` and `xdp_comp` with Turbo Pascal 7 and the default software flo
 
 `lab/toneclip.py` builds a 10 second 160x100 clip at 11040 Hz (184 samples per frame, 60 fps, so the compiler does not have to stretch the rate). `lab/clip/CLIP.SCR` is the script. `lab/runsound.sh` plays it in DOSBox-X.
 
+## Related work
+
+[Scali (Scalibq)](https://github.com/Scalibq/XDC) independently forked XDC in late 2023 and added PC speaker, Covox, Tandy/PCjr and Sound Blaster 1.x playback to the player. His write-up is [Video playback (with audio) on low-end MS-DOS machines](https://scalibq.wordpress.com/2024/01/01/video-playback-on-low-end-ms-dos-machines/). XDC-Plus is a separate project and does not use code from that fork.
+
 ## Licence
 
 XDC-Plus is based on XDC by Jim Leonard (Trixter / Hornet) and extended by @StairwayToRetro, with help from Grok Bot.
