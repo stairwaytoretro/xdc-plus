@@ -1,8 +1,11 @@
 {$R-,S-,G-}
 {Sound Blaster playback for XDP_PLAY.
 
-This is the small unit XDP_PLAY used to get from the third-party soundlib:
-detection, a double-sized DMA buffer, and a per-chunk IRQ that calls
+From-scratch replacement for Stefan Goehler's SOUNDLIB, the third-party
+unit upstream XDC used. Only the call interface is kept. None of SOUNDLIB's
+code is in this unit.
+
+Detection, a double-sized DMA buffer, and a per-chunk IRQ that calls
 play.callproc. The IRQ is the playback clock. 8-bit mono unsigned PCM.
 
 DSP 2.00 and newer use auto-init DMA (command 48h then 1Ch). DSP 1.xx has
