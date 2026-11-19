@@ -4,7 +4,7 @@ unit xdc_common;
 interface
 
 procedure xdc_setvid(b:byte); {set video mode}
-procedure xdc_donevid; {mode 3, then restore any EGA switch byte}
+procedure xdc_donevid; {startup text mode, then restore any EGA switch byte}
 procedure xdc_releasevid; {restore the EGA switch byte; leave the CRTC alone}
 function resolvedAdapter:byte; {1=CGA, 2=EGA, 3=VGA; honours /ADAPTER=}
 procedure fatalerr(s:string);
@@ -14,6 +14,7 @@ var
   egaSwitchesOrig:byte;
   egaSwitchesForced:byte; {value stored at 0040:0088 before the mode set}
   egaSwitchesAfter:byte;  {value read back after the mode set}
+  startupMode:byte;       {BIOS video mode when the program started}
 
 implementation
 
@@ -293,9 +294,18 @@ begin
 end;
 
 procedure xdc_donevid;
+{Every exit path ends here, with or without /p. A BIOS mode set
+ reprograms the whole CRTC, so it also undoes the 160x100 row height
+ and the mode 0Dh planes. Only a colour text mode recorded at startup
+ is restored; anything else falls back to 80-column mode 3.}
+var
+  m:byte;
 begin
+  m:=startupMode;
+  if m>3 then m:=3;
   asm
-    mov     ax,$0003
+    xor     ah,ah
+    mov     al,m
     int     10h
   end;
   xdc_releasevid;
@@ -369,4 +379,13 @@ begin
   halt(1);
 end;
 
+begin
+  {Record the mode DOS was in before anything touches the screen.
+   Bit 7 of AL is the BIOS "screen not cleared" flag, not part of the mode.}
+  asm
+    mov     ah,$0F
+    int     10h
+    and     al,$7F
+    mov     startupMode,al
+  end;
 end.

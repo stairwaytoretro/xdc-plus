@@ -56,6 +56,7 @@ const
   numPauses:word=0;
   quiet:boolean=false;
   presenting:boolean=false;
+  restoreVideo:boolean=true; {false only for /p without /r}
   showpip:boolean=false;
   curPlayPacket:word=0;
   packetsLeft:word=0;
@@ -114,7 +115,9 @@ begin
         db '             vidmode 6 (320x200x16) needs EGA or VGA.',0dh,0ah
         db '  /wNAME     After playback, write the screen buffer to NAME.',0dh,0ah
         db '  /kN        How much KB to read in a single operation',0dh,0ah
-        db '  /p         Presentation mode (no messages, stay in graphics mode)',0dh,0ah
+        db '  /p         Presentation mode: no messages, no credits, no statistics.',0dh,0ah
+        db '             The last picture stays on screen at exit (to chain clips).',0dh,0ah
+        db '  /r         Same as /p, but return to the DOS text prompt at exit.',0dh,0ah
         db '  /d         Displays queue depth indicator',0dh,0ah
         db '$'
 @start:
@@ -290,7 +293,11 @@ begin
   if (paramcount=0) or is_Param('h') or is_Param('?') then printHelp;
   {Reject a bad adapter before any mode set or disk read.}
   readAdapterFlag;
-  if is_param('p') then presenting:=true;
+  {/p keeps Trixter's presentation mode: no messages, and the last
+   picture stays up at exit. /r is the same presentation mode, but the
+   startup text mode is restored at exit. /p /r is the same as /r.}
+  presenting:=is_param('p') or is_param('r');
+  restoreVideo:=(not presenting) or is_param('r');
   if is_param('d') then showpip:=true;
   if noSoundSwitch then quiet:=true;
   if quiet and (not presenting) then
@@ -616,11 +623,17 @@ begin
   end;
   UnhookBreak;
 
-  if not presenting then begin
+  if restoreVideo then begin
     if videoOn then begin
       xdc_donevid;
       videoOn:=false;
     end;
+  end else begin
+    {/p alone: leave the CRTC and the last picture alone.}
+    xdc_releasevid;
+    videoOn:=false;
+  end;
+  if not presenting then begin
     writeProjectBanner;
     writeln('Playback statistics:');
     writeln('# of pauses during playback: ',numPauses);
@@ -629,9 +642,6 @@ begin
     writeln('# of elements still in the ring: ',AVRing.numElements);
     writeln('Frames played: ',curPlayPacket);
     if not quiet then writeln('Sound Blaster IRQs: ',SBIRQCount);
-  end else begin
-    xdc_releasevid;
-    videoOn:=false;
   end;
   AVRing.done;
   freemem(packetindex,header.numpackets);

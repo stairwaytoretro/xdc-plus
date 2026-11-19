@@ -12,6 +12,40 @@ Genuine IBM CGA shows snow in 80-column modes; there is no anti-snow handling fo
 
 `xdp_play` names the video card in the computer with `/ADAPTER=AUTO` (the default, same as omitting it), `/ADAPTER=CGA`, `/ADAPTER=EGA`, or `/ADAPTER=VGA`. That option selects the card, not the picture format. The format comes from the `.XDV` header `vidmode`.
 
+## Player options
+
+`XDP_PLAY /?` lists every switch. Switches start with `/` or `-`, are not case-sensitive, and can come before or after the file name in any order.
+
+| Switch | Effect |
+| --- | --- |
+| `/?` or `/h` | Help screen |
+| `/NOSOUND` or `/q` | No audio; frames are paced by the PIT at the source frame rate |
+| `/ADAPTER=xxx` | Video card in this computer: `AUTO` (default), `CGA`, `EGA` or `VGA` |
+| `/wNAME` | After playback, write the screen buffer to file `NAME` |
+| `/kN` | Read `N` KB from disk in a single operation |
+| `/p` | Presentation mode: no messages, no credits, no statistics. The last picture stays on screen at exit, to chain clips |
+| `/r` | Same as `/p`, but return to the DOS text prompt at exit |
+| `/d` | Show the queue depth indicator |
+
+### `/p` and `/r`
+
+With no switch, the player shows the credits, waits for a key, plays the clip, then returns to the DOS text prompt and prints the statistics.
+
+`/p` is Trixter's presentation mode. Nothing is printed and playback starts at once. When the clip ends, the last picture stays on screen. Use it to chain clips from a batch file: the next clip starts without a flash back to text in between. DOS is back after the last clip, but the prompt is not usable: in mode 6 it appears as huge 40-column text over the picture, and in mode 5 it is invisible, so the picture looks frozen. Play the last clip with `/r` instead, or end the batch file with `MODE CO80`.
+
+`/r` is the same as `/p`: no messages, playback starts at once. When the clip ends, the player returns to the DOS text prompt (the text mode DOS was in when the player started, or 80x25 colour text). `/p /r` is the same as `/r`.
+
+```
+@ECHO OFF
+XDP_PLAY /p CLIP1.XDV
+XDP_PLAY /p CLIP2.XDV
+XDP_PLAY /r CLIP3.XDV
+```
+
+To end on a `/p` clip, add `MODE CO80` as the last line instead.
+
+A failed start and Ctrl-Break always return to the text prompt.
+
 ## Screen modes
 
 A compiler script sets `screenmode`. `xdp_comp` stores that value in the `.XDV` header `vidmode`, and `xdp_play` reads it from the header. `/ADAPTER=` selects the card only (meaningful for mode 5); do not force CGA on an EGA card. `/ADAPTER=CGA` on an EGA card shows nothing, because an EGA has no CGA mode register at 3D8h. Leave the default autodetect unless detection is wrong.
@@ -35,7 +69,7 @@ The cycle budget is the same one modes 1–5 use: half of a 4.77 MHz frame (`76*
 
 An 8 MHz 8088 (the Atari PC2) has about 8/4.77 ≈ 1.7 times as many CPU clocks per frame. The compiler does not raise the budget. EGA video memory adds wait states the CGA-derived constants do not measure, so a clip that stays inside this budget is the safe target for that machine, with some spare time if the bus keeps up.
 
-Mode 6 needs EGA or VGA. `/ADAPTER=CGA`, or a machine whose BIOS looks like CGA only, makes the player stop with a message and leave the display in text mode. It does not set mode 0Dh. On EGA the player applies the same 200-line switch as mode 5 (Andrew Jenner: decrement switch nibble 3 or 9) before the BIOS mode set, so mode 0Dh is 200 lines at 15.7 kHz and syncs on a CGA monitor. Exit restores 80x25 text and the original switch byte. `/p` still leaves the graphics mode up. On VGA, mode 0Dh is the BIOS mode, usually 320x200 double-scanned to 400 lines at 70 Hz. A 15 kHz display should use the card's EGA state so the EGA path above is taken. The Morse KP800/16 in its VGA state answers the VGA BIOS call, so AUTO takes that 70 Hz path.
+Mode 6 needs EGA or VGA. `/ADAPTER=CGA`, or a machine whose BIOS looks like CGA only, makes the player stop with a message and leave the display in text mode. It does not set mode 0Dh. On EGA the player applies the same 200-line switch as mode 5 (Andrew Jenner: decrement switch nibble 3 or 9) before the BIOS mode set, so mode 0Dh is 200 lines at 15.7 kHz and syncs on a CGA monitor. Exit restores the startup text mode (80x25 in practice) and the original switch byte. `/p` leaves the graphics mode up; `/r` returns to the text prompt (see Player options). On VGA, mode 0Dh is the BIOS mode, usually 320x200 double-scanned to 400 lines at 70 Hz. A 15 kHz display should use the card's EGA state so the EGA path above is taken. The Morse KP800/16 in its VGA state answers the VGA BIOS call, so AUTO takes that 70 Hz path.
 
 `lab/gen320.py` writes a short synthetic clip: sixteen horizontal colour bars and a 32x32 white square that steps right. `lab/run320.sh /path/to/tp7.zip` builds it with Turbo Pascal and `xdp_comp`. The first picture is held long enough for the runs to finish before the square moves. `/wNAME` on a mode 6 file writes 32,000 bytes, plane 0 then 1, 2 and 3, 40 bytes per scanline. Modes 1–5 still write 16,000 bytes from B800.
 
@@ -82,7 +116,7 @@ If the DSP does not answer, the player prints the reason and returns to DOS. It 
 XDP_PLAY /NOSOUND CLIP.XDV
 ```
 
-Exit, a failed start, and Ctrl-Break turn the speaker off, stop DMA, and restore the IRQ vector and the 8259 mask. `/p` still leaves the tweaked video mode up, as before. Without `/p`, exit returns to 80x25 text.
+Exit, a failed start, and Ctrl-Break turn the speaker off, stop DMA, and restore the IRQ vector and the 8259 mask. `/p` still leaves the tweaked video mode up, as before; `/r` returns to the text prompt. With no switch, exit returns to the startup text mode (80x25 in practice).
 
 Build `xdp_play` and `xdp_comp` with Turbo Pascal 7 and the default software floating point (`{$N-}`). The player has to run on an 8088 that has no 8087. `xdp_comp` uses Turbo Vision's `MemAllocSeg` from the Turbo Pascal `MEMORY` unit.
 
