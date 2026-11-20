@@ -41,6 +41,8 @@ Both are git submodules. This repository points at them and does not store their
 
 Neither repository has a licence file. `SUPPORT`, `TINTERRU`, `RINGBUFU`, `RTEH`, and `M6845CTL` are Jim Leonard's units and carry no licence notice of their own. The header of `TINTERRU.PAS` calls it Trixter's interrupt and timer unit and thanks Mark Feldman, Kris Heidenstrom, and Klaus Hartnegg.
 
+On 20 November 2026, Jim Leonard confirmed by email to the XDC-Plus maintainer that his units in these two repositories may be treated as MIT-licensed, under the same terms as XDC, Copyright (c) Jim Leonard. XDC-Plus relies on that permission for the source and for the distributed binaries.
+
 `CMDLIN.PAS` is by Jim Walsh. Its header says "This is completely public domain". A later fix in that file is credited to Trixter.
 
 The other files in the UNITS submodule are not referenced by this build.
